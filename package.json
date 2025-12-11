@@ -1,0 +1,28 @@
+{
+  "name": "world-cup-sos",
+  "version": "1.0.0",
+  "description": "World Cup 2026 Strength of Schedule Calculator - Analyzes group compositions, simulates tournaments, and calculates win probabilities using Elo ratings",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "python3 test_win_probability.py && echo 'Unit tests passed'"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "keywords": [
+    "world-cup",
+    "soccer",
+    "football",
+    "elo",
+    "monte-carlo",
+    "simulation",
+    "2026"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Cup 2026 - Strength of Schedule</title>
+  <meta name="description" content="Real-time Strength of Schedule calculator for 2026 FIFA World Cup teams">
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-content">
+        <h1 class="logo">
+          <span class="logo-icon">⚽</span>
+          World Cup 2026 SoS
+        </h1>
+        <div class="header-controls">
+          <div class="live-indicator" id="liveIndicator">
+            <span class="pulse"></span>
+            <span>LIVE</span>
+          </div>
+          <div class="last-update" id="lastUpdate">--</div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="sos">SoS Rankings</button>
+      <button class="tab" data-tab="groups">Groups</button>
+      <button class="tab" data-tab="tables">Group Tables</button>
+      <button class="tab" data-tab="results">Live Results</button>
+      <button class="tab" data-tab="playoffs">Playoffs</button>
+    </nav>
+
+    <main class="main">
+      <!-- SoS Rankings Tab -->
+      <section class="tab-content active" id="tab-sos">
+        <div class="section-header">
+          <h2>Strength of Schedule Rankings</h2>
+          <p class="subtitle">Teams ranked by Group Opponent SoS (hardest schedule first)</p>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="sosTable">
+            <thead>
+              <tr>
+                <th>SoS Rank</th>
+                <th>Team</th>
+                <th>Group</th>
+                <th>Elo Rating</th>
+                <th>Group Opponent SoS</th>
+                <th>Overall Group Strength</th>
+              </tr>
+            </thead>
+            <tbody id="sosTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Groups Tab -->
+      <section class="tab-content" id="tab-groups">
+        <div class="section-header">
+          <h2>Group Strength Rankings</h2>
+          <p class="subtitle">Groups ranked by overall strength (average team Elo)</p>
+        </div>
+        <div class="groups-grid" id="groupsGrid"></div>
+      </section>
+
+      <!-- Group Tables Tab -->
+      <section class="tab-content" id="tab-tables">
+        <div class="section-header">
+          <h2>Expected Group Standings</h2>
+          <p class="subtitle">Bracket-aware simulation (50,000 tournaments) with full knockout round probabilities</p>
+        </div>
+        <div class="groups-grid" id="groupTablesGrid"></div>
+      </section>
+
+      <!-- Live Results Tab -->
+      <section class="tab-content" id="tab-results">
+        <div class="section-header">
+          <h2>Latest Match Results</h2>
+          <p class="subtitle">Recent matches affecting Elo ratings</p>
+        </div>
+        <div class="results-list" id="resultsList"></div>
+      </section>
+
+      <!-- Playoffs Tab -->
+      <section class="tab-content" id="tab-playoffs">
+        <div class="section-header">
+          <h2>Remaining Qualification</h2>
+          <p class="subtitle">6 spots remain via playoffs (March 2026)</p>
+        </div>
+        <div class="playoffs-container" id="playoffsContainer"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Data from <a href="https://www.eloratings.net" target="_blank">eloratings.net</a> • Auto-refreshes every 30
+        seconds</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,410 @@
+{
+    "drawDate": "2025-12-05",
+    "tournament": "2026 FIFA World Cup",
+    "hosts": [
+        "US",
+        "MX",
+        "CA"
+    ],
+    "groups": {
+        "A": {
+            "teams": [
+                "MX",
+                "ZA",
+                "KR",
+                "UEFA_D"
+            ],
+            "notes": "UEFA_D: North Macedonia, Denmark, Czechia, or Ireland"
+        },
+        "B": {
+            "teams": [
+                "CA",
+                "UEFA_A",
+                "QA",
+                "CH"
+            ],
+            "notes": "UEFA_A: Italy, Northern Ireland, Wales, or Bosnia & Herzegovina"
+        },
+        "C": {
+            "teams": [
+                "BR",
+                "MA",
+                "HT",
+                "SQ"
+            ],
+            "notes": ""
+        },
+        "D": {
+            "teams": [
+                "US",
+                "PY",
+                "AU",
+                "UEFA_C"
+            ],
+            "notes": "UEFA_C: Turkey, Romania, Slovakia, or Kosovo"
+        },
+        "E": {
+            "teams": [
+                "DE",
+                "CW",
+                "CI",
+                "EC"
+            ],
+            "notes": ""
+        },
+        "F": {
+            "teams": [
+                "NL",
+                "JP",
+                "UEFA_B",
+                "TN"
+            ],
+            "notes": "UEFA_B: Ukraine, Sweden, Poland, or Albania"
+        },
+        "G": {
+            "teams": [
+                "BE",
+                "EG",
+                "IR",
+                "NZ"
+            ],
+            "notes": ""
+        },
+        "H": {
+            "teams": [
+                "ES",
+                "CV",
+                "SA",
+                "UY"
+            ],
+            "notes": ""
+        },
+        "I": {
+            "teams": [
+                "FR",
+                "SN",
+                "NO",
+                "FIFA_2"
+            ],
+            "notes": "FIFA_2: Bolivia, Suriname, or Iraq (Intercontinental Playoff 2)"
+        },
+        "J": {
+            "teams": [
+                "AR",
+                "DZ",
+                "AT",
+                "JO"
+            ],
+            "notes": ""
+        },
+        "K": {
+            "teams": [
+                "PT",
+                "UZ",
+                "CO",
+                "FIFA_1"
+            ],
+            "notes": "FIFA_1: Jamaica, New Caledonia, or DR Congo (Intercontinental Playoff 1)"
+        },
+        "L": {
+            "teams": [
+                "EN",
+                "RS",
+                "GH",
+                "PA"
+            ],
+            "notes": ""
+        }
+    },
+    "playoffs": {
+        "intercontinental": {
+            "bracket1": {
+                "seeded": "CD",
+                "unseeded": [
+                    "JM",
+                    "NC"
+                ],
+                "winner": "FIFA_1",
+                "destinationGroup": "K"
+            },
+            "bracket2": {
+                "seeded": "IQ",
+                "unseeded": [
+                    "BO",
+                    "SR"
+                ],
+                "winner": "FIFA_2",
+                "destinationGroup": "I"
+            }
+        },
+        "uefa": {
+            "pathA": {
+                "teams": [
+                    "IT",
+                    "EI",
+                    "WA",
+                    "BA"
+                ],
+                "winner": "UEFA_A",
+                "destinationGroup": "B"
+            },
+            "pathB": {
+                "teams": [
+                    "UA",
+                    "SE",
+                    "PL",
+                    "AL"
+                ],
+                "winner": "UEFA_B",
+                "destinationGroup": "F"
+            },
+            "pathC": {
+                "teams": [
+                    "TR",
+                    "RO",
+                    "SK",
+                    "KO"
+                ],
+                "winner": "UEFA_C",
+                "destinationGroup": "D"
+            },
+            "pathD": {
+                "teams": [
+                    "NM",
+                    "DK",
+                    "CZ",
+                    "IE"
+                ],
+                "winner": "UEFA_D",
+                "destinationGroup": "A"
+            }
+        }
+    },
+    "knockout": {
+        "r32": [
+            {
+                "match": 1,
+                "team1": "2A",
+                "team2": "2B",
+                "nextMatch": 17
+            },
+            {
+                "match": 2,
+                "team1": "1C",
+                "team2": "2F",
+                "nextMatch": 17
+            },
+            {
+                "match": 3,
+                "team1": "1A",
+                "team2": "3CEFHI",
+                "nextMatch": 18
+            },
+            {
+                "match": 4,
+                "team1": "1B",
+                "team2": "3EFGIJ",
+                "nextMatch": 18
+            },
+            {
+                "match": 5,
+                "team1": "1F",
+                "team2": "2C",
+                "nextMatch": 19
+            },
+            {
+                "match": 6,
+                "team1": "1E",
+                "team2": "3ABCDF",
+                "nextMatch": 19
+            },
+            {
+                "match": 7,
+                "team1": "2D",
+                "team2": "2G",
+                "nextMatch": 20
+            },
+            {
+                "match": 8,
+                "team1": "1D",
+                "team2": "3BEFIJ",
+                "nextMatch": 20
+            },
+            {
+                "match": 9,
+                "team1": "1H",
+                "team2": "2J",
+                "nextMatch": 21
+            },
+            {
+                "match": 10,
+                "team1": "1G",
+                "team2": "3AEHIJ",
+                "nextMatch": 21
+            },
+            {
+                "match": 11,
+                "team1": "1J",
+                "team2": "2H",
+                "nextMatch": 22
+            },
+            {
+                "match": 12,
+                "team1": "1I",
+                "team2": "3CDFGH",
+                "nextMatch": 22
+            },
+            {
+                "match": 13,
+                "team1": "2K",
+                "team2": "2L",
+                "nextMatch": 23
+            },
+            {
+                "match": 14,
+                "team1": "1L",
+                "team2": "3EHIJK",
+                "nextMatch": 23
+            },
+            {
+                "match": 15,
+                "team1": "1K",
+                "team2": "3DEIJL",
+                "nextMatch": 24
+            },
+            {
+                "match": 16,
+                "team1": "2E",
+                "team2": "2I",
+                "nextMatch": 24
+            }
+        ],
+        "r16": [
+            {
+                "match": 17,
+                "prevMatches": [
+                    1,
+                    2
+                ],
+                "nextMatch": 25
+            },
+            {
+                "match": 18,
+                "prevMatches": [
+                    3,
+                    4
+                ],
+                "nextMatch": 25
+            },
+            {
+                "match": 19,
+                "prevMatches": [
+                    5,
+                    6
+                ],
+                "nextMatch": 26
+            },
+            {
+                "match": 20,
+                "prevMatches": [
+                    7,
+                    8
+                ],
+                "nextMatch": 26
+            },
+            {
+                "match": 21,
+                "prevMatches": [
+                    9,
+                    10
+                ],
+                "nextMatch": 27
+            },
+            {
+                "match": 22,
+                "prevMatches": [
+                    11,
+                    12
+                ],
+                "nextMatch": 27
+            },
+            {
+                "match": 23,
+                "prevMatches": [
+                    13,
+                    14
+                ],
+                "nextMatch": 28
+            },
+            {
+                "match": 24,
+                "prevMatches": [
+                    15,
+                    16
+                ],
+                "nextMatch": 28
+            }
+        ],
+        "qf": [
+            {
+                "match": 25,
+                "prevMatches": [
+                    17,
+                    18
+                ],
+                "nextMatch": 29
+            },
+            {
+                "match": 26,
+                "prevMatches": [
+                    19,
+                    20
+                ],
+                "nextMatch": 29
+            },
+            {
+                "match": 27,
+                "prevMatches": [
+                    21,
+                    22
+                ],
+                "nextMatch": 30
+            },
+            {
+                "match": 28,
+                "prevMatches": [
+                    23,
+                    24
+                ],
+                "nextMatch": 30
+            }
+        ],
+        "sf": [
+            {
+                "match": 29,
+                "prevMatches": [
+                    25,
+                    26
+                ],
+                "nextMatch": 31
+            },
+            {
+                "match": 30,
+                "prevMatches": [
+                    27,
+                    28
+                ],
+                "nextMatch": 31
+            }
+        ],
+        "final": [
+            {
+                "match": 31,
+                "prevMatches": [
+                    29,
+                    30
+                ]
+            }
+        ]
+    }
+}
