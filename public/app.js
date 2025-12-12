@@ -6,6 +6,7 @@
 let sosData = null;
 let resultsData = null;
 let refreshInterval = null;
+let bracketOverrides = {}; // { matchId: { teamCode, teamName, teamElo } }
 
 // Flag CDN URL
 const FLAG_CDN = 'https://flagcdn.com/w40';
@@ -121,6 +122,7 @@ async function fetchAllData() {
     renderGroupTables();
     renderResults();
     renderPlayoffs();
+    renderBracket();
     updateLastUpdate();
   } catch (error) {
     console.error('Error fetching data:', error);
@@ -131,7 +133,7 @@ async function fetchAllData() {
  * Start auto-refresh
  */
 function startAutoRefresh() {
-  refreshInterval = setInterval(fetchAllData, 30000);
+  refreshInterval = setInterval(fetchAllData, 60 * 60 * 1000); // 1 hour
 }
 
 /**
@@ -688,6 +690,367 @@ function renderPlayoffs() {
       </div>
     </div>
   `;
+}
+
+/**
+ * Calculate knockout match win probability using Elo
+ */
+function knockoutWinProb(elo1, elo2) {
+  return 1 / (1 + Math.pow(10, (elo2 - elo1) / 400));
+}
+
+/**
+ * Get expected team for a bracket slot (e.g., "1A", "2B", "3CEFHI")
+ * Returns team with their base probability of being in that position
+ */
+function resolveBracketSlot(slot) {
+  if (!sosData || !sosData.groupSimulation) return null;
+
+  const groupSim = sosData.groupSimulation;
+
+  if (slot.startsWith('3')) {
+    // Third place pool - return placeholder with approximate qualifying probability
+    const pool = slot.slice(1);
+    return {
+      code: `3rd-${pool}`,
+      name: `3rd (${pool})`,
+      elo: 1600,
+      isThirdPlace: true,
+      pool,
+      baseProb: 0.67 // ~2/3 of third place teams qualify
+    };
+  }
+
+  const pos = parseInt(slot[0]);
+  const group = slot[1];
+  const groupData = groupSim[group];
+
+  if (!groupData || groupData.length < pos) return null;
+
+  // Find the most likely team for this position
+  const sortedByPos = [...groupData].sort((a, b) => {
+    const aProb = (pos === 1 ? a.pos1Prob : a.pos2Prob) || 0;
+    const bProb = (pos === 1 ? b.pos1Prob : b.pos2Prob) || 0;
+    return bProb - aProb;
+  });
+
+  const team = sortedByPos[0];
+  const posProb = pos === 1 ? team.pos1Prob : team.pos2Prob;
+
+  return {
+    code: team.code,
+    name: team.name,
+    elo: team.elo,
+    baseProb: posProb, // Probability of finishing in this position
+    slot
+  };
+}
+
+/**
+ * Calculate cumulative probability for a team to win a specific match
+ * This accounts for the entire path (qualifying + winning all prior matches)
+ */
+function getCumulativeProb(teamCode, matchId, knockout) {
+  // Check if this match is locked
+  if (bracketOverrides[matchId]) {
+    // If this team is locked as winner, their prob for THIS match is 100%
+    // But we still need to multiply by probability of reaching this match
+    if (bracketOverrides[matchId].code === teamCode) {
+      // Get the prob of reaching this match
+      const reachProb = getProbOfReaching(teamCode, matchId, knockout);
+      return reachProb; // They win this match with 100%, so cumulative = reach prob
+    } else {
+      return 0; // Another team is locked
+    }
+  }
+
+  // For unlocked matches, calculate normally
+  const reachProb = getProbOfReaching(teamCode, matchId, knockout);
+  const { team1, team2 } = getMatchTeamsWithProb(matchId, knockout);
+
+  if (!team1 || !team2) return reachProb;
+
+  const team = team1.code === teamCode ? team1 : team2;
+  const opponent = team1.code === teamCode ? team2 : team1;
+
+  const winProb = knockoutWinProb(team.elo, opponent.elo);
+  return reachProb * winProb;
+}
+
+/**
+ * Get probability of a team reaching a specific match
+ */
+function getProbOfReaching(teamCode, matchId, knockout) {
+  const match = findMatch(matchId, knockout);
+  if (!match) return 0;
+
+  // R32 matches - probability is just the group position probability
+  if (matchId <= 16) {
+    const team1 = resolveBracketSlot(match.team1);
+    const team2 = resolveBracketSlot(match.team2);
+    const team = (team1 && team1.code === teamCode) ? team1 : (team2 && team2.code === teamCode) ? team2 : null;
+    return team ? (team.baseProb || 1) : 0;
+  }
+
+  // For later rounds, need to have won the previous match
+  if (match.prevMatches) {
+    // Find which previous match this team came from
+    for (const prevMatchId of match.prevMatches) {
+      const prevMatch = findMatch(prevMatchId, knockout);
+      if (!prevMatch) continue;
+
+      // Check if team could be in this previous match
+      const { team1, team2 } = getMatchTeamsWithProb(prevMatchId, knockout);
+      if ((team1 && team1.code === teamCode) || (team2 && team2.code === teamCode)) {
+        // Team is in this path - cumulative prob of winning that match
+        return getCumulativeProbWin(teamCode, prevMatchId, knockout);
+      }
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Get cumulative probability of winning a match (for use in reach calculations)
+ */
+function getCumulativeProbWin(teamCode, matchId, knockout) {
+  // If match is locked
+  if (bracketOverrides[matchId]) {
+    if (bracketOverrides[matchId].code === teamCode) {
+      return getProbOfReaching(teamCode, matchId, knockout);
+    }
+    return 0;
+  }
+
+  const reachProb = getProbOfReaching(teamCode, matchId, knockout);
+  const { team1, team2 } = getMatchTeamsWithProb(matchId, knockout);
+
+  if (!team1 || !team2) return reachProb;
+
+  const team = team1.code === teamCode ? team1 : team2;
+  const opponent = team1.code === teamCode ? team2 : team1;
+
+  const winProb = knockoutWinProb(team.elo, opponent.elo);
+  return reachProb * winProb;
+}
+
+/**
+ * Find a match by ID
+ */
+function findMatch(matchId, knockout) {
+  const allMatches = [...knockout.r32, ...knockout.r16, ...knockout.qf, ...knockout.sf, ...knockout.final];
+  return allMatches.find(m => m.match === matchId);
+}
+
+/**
+ * Get teams for a match (used for probability calculations)
+ */
+function getMatchTeamsWithProb(matchId, knockout) {
+  const match = findMatch(matchId, knockout);
+  if (!match) return { team1: null, team2: null };
+
+  if (matchId <= 16) {
+    return {
+      team1: resolveBracketSlot(match.team1),
+      team2: resolveBracketSlot(match.team2)
+    };
+  }
+
+  if (match.prevMatches) {
+    return {
+      team1: getMatchWinner(match.prevMatches[0], knockout),
+      team2: getMatchWinner(match.prevMatches[1], knockout)
+    };
+  }
+
+  return { team1: null, team2: null };
+}
+
+/**
+ * Get the winner of a previous match (from override or probability)
+ */
+function getMatchWinner(matchId, knockout) {
+  // Check if user has overridden this match
+  if (bracketOverrides[matchId]) {
+    return bracketOverrides[matchId];
+  }
+
+  const match = findMatch(matchId, knockout);
+  if (!match) return null;
+
+  // For R32 matches, resolve from group slots
+  if (matchId <= 16) {
+    const team1 = resolveBracketSlot(match.team1);
+    const team2 = resolveBracketSlot(match.team2);
+    if (!team1 || !team2) return null;
+
+    const prob1 = knockoutWinProb(team1.elo, team2.elo);
+    return prob1 >= 0.5 ? { ...team1, winProb: prob1 } : { ...team2, winProb: 1 - prob1 };
+  }
+
+  // For later rounds, recursively get winners of previous matches
+  if (match.prevMatches) {
+    const prev1 = getMatchWinner(match.prevMatches[0], knockout);
+    const prev2 = getMatchWinner(match.prevMatches[1], knockout);
+    if (!prev1 || !prev2) return null;
+
+    const prob1 = knockoutWinProb(prev1.elo, prev2.elo);
+    return prob1 >= 0.5 ? { ...prev1, winProb: prob1 } : { ...prev2, winProb: 1 - prob1 };
+  }
+
+  return null;
+}
+
+/**
+ * Get teams for a specific match (for display)
+ */
+function getMatchTeams(match, knockout) {
+  if (match.match <= 16) {
+    return {
+      team1: resolveBracketSlot(match.team1),
+      team2: resolveBracketSlot(match.team2)
+    };
+  }
+
+  if (match.prevMatches) {
+    return {
+      team1: getMatchWinner(match.prevMatches[0], knockout),
+      team2: getMatchWinner(match.prevMatches[1], knockout)
+    };
+  }
+
+  return { team1: null, team2: null };
+}
+
+/**
+ * Handle clicking on a team in the bracket
+ */
+function handleBracketClick(matchId, team) {
+  if (!team || team.isThirdPlace) return;
+
+  // Toggle: if already selected, deselect
+  if (bracketOverrides[matchId] && bracketOverrides[matchId].code === team.code) {
+    delete bracketOverrides[matchId];
+  } else {
+    bracketOverrides[matchId] = {
+      code: team.code,
+      name: team.name,
+      elo: team.elo
+    };
+  }
+
+  // Clear downstream overrides (matches that depend on this one)
+  const knockout = sosData.worldCupGroups.knockout;
+  clearDownstreamOverrides(matchId, knockout);
+
+  renderBracket();
+}
+
+/**
+ * Clear overrides for matches that depend on the given match
+ */
+function clearDownstreamOverrides(matchId, knockout) {
+  const allMatches = [...knockout.r16, ...knockout.qf, ...knockout.sf, ...knockout.final];
+
+  for (const match of allMatches) {
+    if (match.prevMatches && match.prevMatches.includes(matchId)) {
+      delete bracketOverrides[match.match];
+      clearDownstreamOverrides(match.match, knockout);
+    }
+  }
+}
+
+/**
+ * Reset all bracket overrides
+ */
+function resetBracket() {
+  bracketOverrides = {};
+  renderBracket();
+}
+
+/**
+ * Render a single team slot in a match - now showing cumulative probability
+ */
+function renderBracketTeam(team, matchId, otherTeam, knockout) {
+  if (!team) {
+    return `<div class="bracket-team tbd"><span class="bracket-team-name">TBD</span></div>`;
+  }
+
+  const flagUrl = getFlagUrl(team.code);
+  const isLocked = bracketOverrides[matchId] && bracketOverrides[matchId].code === team.code;
+  const isEliminated = bracketOverrides[matchId] && bracketOverrides[matchId].code !== team.code;
+
+  // Calculate CUMULATIVE probability (total path probability)
+  let probDisplay = '';
+  if (!team.isThirdPlace) {
+    if (isLocked) {
+      // Show cumulative prob of reaching this match (they win with 100%)
+      const reachProb = getProbOfReaching(team.code, matchId, knockout);
+      probDisplay = `<span class="bracket-team-prob locked">${Math.round(reachProb * 100)}% ✓</span>`;
+    } else if (isEliminated) {
+      probDisplay = `<span class="bracket-team-prob eliminated">0%</span>`;
+    } else if (otherTeam && !otherTeam.isThirdPlace) {
+      // Show cumulative probability of winning THIS match
+      const cumulativeProb = getCumulativeProbWin(team.code, matchId, knockout);
+      probDisplay = `<span class="bracket-team-prob">${Math.round(cumulativeProb * 100)}%</span>`;
+    }
+  }
+
+  const classes = ['bracket-team'];
+  if (isLocked) classes.push('locked');
+  if (isEliminated) classes.push('eliminated');
+  if (team.isThirdPlace) classes.push('tbd');
+
+  return `
+    <div class="${classes.join(' ')}" onclick="handleBracketClick(${matchId}, ${JSON.stringify(team).replace(/"/g, '&quot;')})">
+      ${flagUrl && !team.isThirdPlace ? `<img src="${flagUrl}" alt="${team.code}" class="bracket-team-flag">` : ''}
+      <span class="bracket-team-name">${team.name}</span>
+      ${probDisplay}
+    </div>
+  `;
+}
+
+/**
+ * Render a single match
+ */
+function renderBracketMatch(match, knockout) {
+  const { team1, team2 } = getMatchTeams(match, knockout);
+
+  return `
+    <div class="bracket-match" data-match="${match.match}">
+      <div class="bracket-match-header">Match ${match.match}</div>
+      ${renderBracketTeam(team1, match.match, team2, knockout)}
+      ${renderBracketTeam(team2, match.match, team1, knockout)}
+    </div>
+  `;
+}
+
+/**
+ * Render the full bracket
+ */
+function renderBracket() {
+  if (!sosData || !sosData.worldCupGroups) return;
+
+  const container = document.getElementById('bracketContainer');
+  const knockout = sosData.worldCupGroups.knockout;
+
+  const rounds = [
+    { name: 'Round of 32', matches: knockout.r32 },
+    { name: 'Round of 16', matches: knockout.r16 },
+    { name: 'Quarterfinals', matches: knockout.qf },
+    { name: 'Semifinals', matches: knockout.sf },
+    { name: 'Final', matches: knockout.final }
+  ];
+
+  container.innerHTML = rounds.map(round => `
+    <div class="bracket-round">
+      <div class="bracket-round-header">${round.name}</div>
+      <div class="bracket-matches">
+        ${round.matches.map(match => renderBracketMatch(match, knockout)).join('')}
+      </div>
+    </div>
+  `).join('');
 }
 
 // Start the app

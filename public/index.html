@@ -34,6 +34,7 @@
       <button class="tab" data-tab="tables">Group Tables</button>
       <button class="tab" data-tab="results">Live Results</button>
       <button class="tab" data-tab="playoffs">Playoffs</button>
+      <button class="tab" data-tab="bracket">Bracket</button>
     </nav>
 
     <main class="main">
@@ -94,6 +95,18 @@
           <p class="subtitle">6 spots remain via playoffs (March 2026)</p>
         </div>
         <div class="playoffs-container" id="playoffsContainer"></div>
+      </section>
+
+      <!-- Bracket Tab -->
+      <section class="tab-content" id="tab-bracket">
+        <div class="section-header">
+          <h2>Knockout Bracket</h2>
+          <p class="subtitle">Click any team to lock them as winner and recalculate the bracket</p>
+          <button class="reset-bracket-btn" id="resetBracketBtn" onclick="resetBracket()">Reset Bracket</button>
+        </div>
+        <div class="bracket-wrapper">
+          <div class="bracket-container" id="bracketContainer"></div>
+        </div>
       </section>
     </main>
 

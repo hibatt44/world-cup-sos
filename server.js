@@ -20,7 +20,7 @@ let monteCarloCache = {
     rankingsTimestamp: 0  // Track which rankings version this was computed for
 };
 
-const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));

@@ -823,6 +823,143 @@ body {
   margin-left: 0.25rem;
 }
 
+/* Bracket Styles */
+.bracket-wrapper {
+  overflow-x: auto;
+  padding-bottom: 1rem;
+}
+
+.bracket-container {
+  display: flex;
+  gap: 1rem;
+  min-width: max-content;
+  padding: 1rem;
+}
+
+.bracket-round {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 180px;
+}
+
+.bracket-round-header {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.bracket-matches {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  flex: 1;
+  gap: 0.5rem;
+}
+
+.bracket-match {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.bracket-match-header {
+  padding: 0.25rem 0.5rem;
+  background: var(--bg-secondary);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.bracket-team {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid var(--border);
+}
+
+.bracket-team:last-child {
+  border-bottom: none;
+}
+
+.bracket-team:hover {
+  background: var(--bg-hover);
+}
+
+.bracket-team.selected {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+  border-left: 3px solid var(--success);
+}
+
+.bracket-team.locked {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+  border-left: 3px solid var(--accent-primary);
+}
+
+.bracket-team.eliminated {
+  opacity: 0.4;
+}
+
+.bracket-team-flag {
+  width: 24px;
+  height: 18px;
+  border-radius: 2px;
+  object-fit: cover;
+}
+
+.bracket-team-name {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bracket-team-prob {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.4rem;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  color: var(--accent-primary);
+}
+
+.bracket-team.tbd {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
+.bracket-team.tbd:hover {
+  background: transparent;
+}
+
+.reset-bracket-btn {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-bracket-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+}
+
 /* Footer */
 .footer {
   padding: 1.5rem 2rem;
