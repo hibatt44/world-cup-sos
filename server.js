@@ -238,4 +238,5 @@ app.get('/api/groups', (req, res) => {
 // Start server
 app.listen(PORT, () => {
     console.log(`World Cup SoS server running at http://localhost:${PORT}`);
+    console.log('Ready for Railway deployment via dashboard!');
 });
