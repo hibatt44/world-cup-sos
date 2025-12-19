@@ -30,11 +30,20 @@ app.use(express.static(path.join(__dirname, 'public')));
  */
 async function fetchTSV(filename) {
     const url = `https://www.eloratings.net/${filename}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch ${filename}: ${response.status}`);
+    console.log(`Fetching: ${url}`);
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.error(`HTTP error fetching ${filename}: ${response.status} ${response.statusText}`);
+            throw new Error(`Failed to fetch ${filename}: ${response.status}`);
+        }
+        const text = await response.text();
+        console.log(`Successfully fetched ${filename} (${text.length} bytes)`);
+        return text;
+    } catch (error) {
+        console.error(`Network error or fetch failed for ${filename}:`, error.message);
+        throw error;
     }
-    return await response.text();
 }
 
 /**
@@ -227,7 +236,11 @@ app.get('/api/sos', async (req, res) => {
             lastUpdated: new Date().toISOString()
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Error in /api/sos:', error);
+        res.status(500).json({
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
