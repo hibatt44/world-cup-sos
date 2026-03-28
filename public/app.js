@@ -7,6 +7,16 @@ let sosData = null;
 let resultsData = null;
 let refreshInterval = null;
 let bracketOverrides = {}; // { matchId: { teamCode, teamName, teamElo } }
+let resultsFilter = 'wc'; // 'wc' or 'all'
+let sosGroupFilter = 'all'; // 'all' or a group letter
+let r32Collapsed = false;
+
+// World Cup qualified team codes (for results filtering)
+const WC_TEAM_CODES = new Set([
+  'AR','AT','AU','BE','BR','CA','CH','CI','CO','CV','CW','DE','DZ','EC',
+  'EG','EN','ES','FR','GH','HT','IR','JO','JP','KR','MA','MX','NL','NO',
+  'NZ','PA','PT','PY','QA','RS','SA','SN','SQ','TN','US','UY','UZ','ZA'
+]);
 
 // Flag CDN URL
 const FLAG_CDN = 'https://flagcdn.com/w40';
@@ -79,6 +89,7 @@ function getFlagUrl(code) {
  */
 async function init() {
   setupTabs();
+  setupViewToggle();
   await fetchAllData();
   startAutoRefresh();
 
@@ -97,19 +108,15 @@ function setupTabs() {
   const tabs = document.querySelectorAll('.tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      // Update active tab
       tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
 
-      // Show corresponding content
       const tabName = tab.dataset.tab;
       document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
       });
       document.getElementById(`tab-${tabName}`).classList.add('active');
 
-      // Redraw bracket connectors when switching to bracket tab
-      // Use setTimeout to allow the tab content to become visible first
       if (tabName === 'bracket') {
         setTimeout(() => {
           drawBracketConnectors();
@@ -117,6 +124,49 @@ function setupTabs() {
       }
     });
   });
+}
+
+/**
+ * Setup view toggle within Groups tab
+ */
+function setupViewToggle() {
+  const viewBtns = document.querySelectorAll('.view-btn');
+  viewBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      viewBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const viewName = btn.dataset.view;
+      document.querySelectorAll('.view-content').forEach(v => {
+        v.classList.remove('active');
+      });
+      document.getElementById(`view-${viewName}`).classList.add('active');
+    });
+  });
+}
+
+/**
+ * Filter results by WC teams or all
+ */
+function filterResults(mode) {
+  resultsFilter = mode;
+  document.getElementById('filterWC').classList.toggle('active', mode === 'wc');
+  document.getElementById('filterAll').classList.toggle('active', mode === 'all');
+  renderResults();
+}
+
+/**
+ * Toggle R32 collapse in bracket
+ */
+function toggleR32() {
+  r32Collapsed = !r32Collapsed;
+  const r32Round = document.querySelector('.bracket-round:first-child');
+  const btn = document.getElementById('collapseR32Btn');
+  if (r32Round) {
+    r32Round.classList.toggle('collapsed', r32Collapsed);
+    btn.textContent = r32Collapsed ? 'Expand R32' : 'Collapse R32';
+    setTimeout(() => drawBracketConnectors(), 50);
+  }
 }
 
 /**
@@ -172,7 +222,7 @@ function getSoSClass(value, min, max) {
 }
 
 /**
- * Render SoS rankings table
+ * Render SoS rankings table with group filter chips and visual separators
  */
 function renderSoSTable() {
   if (!sosData || !sosData.teams) return;
@@ -180,17 +230,40 @@ function renderSoSTable() {
   const tbody = document.getElementById('sosTableBody');
   const teams = sosData.teams;
 
+  // Build group filter chips
+  const groups = [...new Set(teams.map(t => t.group))].sort();
+  const filterContainer = document.getElementById('groupFilter');
+  filterContainer.innerHTML = `
+    <button class="group-chip ${sosGroupFilter === 'all' ? 'active' : ''}" onclick="setSoSGroupFilter('all')">All</button>
+    ${groups.map(g => `
+      <button class="group-chip ${sosGroupFilter === g ? 'active' : ''}" onclick="setSoSGroupFilter('${g}')">${g}</button>
+    `).join('')}
+  `;
+
+  // Filter teams
+  const filtered = sosGroupFilter === 'all' ? teams : teams.filter(t => t.group === sosGroupFilter);
+
   // Calculate min/max for coloring
   const sosValues = teams.map(t => t.groupOpponentSoS);
   const minSoS = Math.min(...sosValues);
   const maxSoS = Math.max(...sosValues);
 
-  tbody.innerHTML = teams.map(team => {
+  // Track groups for alternating colors
+  const groupIndex = {};
+  let gIdx = 0;
+  filtered.forEach(t => {
+    if (!(t.group in groupIndex)) {
+      groupIndex[t.group] = gIdx++;
+    }
+  });
+
+  tbody.innerHTML = filtered.map(team => {
     const flagUrl = getFlagUrl(team.code);
     const sosClass = getSoSClass(team.groupOpponentSoS, minSoS, maxSoS);
+    const isEvenGroup = groupIndex[team.group] % 2 === 1;
 
     return `
-      <tr>
+      <tr class="${isEvenGroup ? 'group-row-even' : ''}">
         <td><strong>#${team.sosRank}</strong></td>
         <td>
           <div class="team-cell">
@@ -202,10 +275,14 @@ function renderSoSTable() {
         <td><span class="group-badge">${team.group}</span></td>
         <td>${team.elo}</td>
         <td class="sos-value ${sosClass}">${team.groupOpponentSoS}</td>
-        <td>${team.groupStrength}</td>
       </tr>
     `;
   }).join('');
+}
+
+function setSoSGroupFilter(group) {
+  sosGroupFilter = group;
+  renderSoSTable();
 }
 
 /**
@@ -251,23 +328,14 @@ function renderGroups() {
           const favFlag = getFlagUrl(playoffSlot.favoriteCode);
           const favName = getTeamName(playoffSlot.favoriteCode, teamLookup);
           return `
-                  <div class="group-team playoff-slot">
-                    <div class="playoff-slot-header">
-                      <span class="playoff-slot-label">${code.replace('_', ' ')}</span>
-                      <span class="sim-badge ${getDifficultyClass(playoffSlot.difficulty)}">${playoffSlot.difficulty}</span>
+                  <div class="group-team playoff-slot-compact">
+                    <span class="slot-label">${code.replace('_', ' ')}</span>
+                    <div class="slot-favorite">
+                      ${favFlag ? `<img src="${favFlag}" class="team-flag">` : ''}
+                      <span>${favName}</span>
+                      <span class="slot-prob">${Math.round(playoffSlot.favoriteProb * 100)}%</span>
                     </div>
-                    <div class="playoff-slot-body">
-                      <div class="playoff-expected">
-                        <span class="expected-label">Expected:</span>
-                        <span class="expected-elo">${playoffSlot.expectedElo} Elo</span>
-                      </div>
-                      <div class="playoff-favorite">
-                        ${favFlag ? `<img src="${favFlag}" class="team-flag">` : ''}
-                        <span>${favName}</span>
-                        <span class="favorite-prob">${Math.round(playoffSlot.favoriteProb * 100)}%</span>
-                      </div>
-                      <div class="playoff-range">Range: ${playoffSlot.minElo} - ${playoffSlot.maxElo}</div>
-                    </div>
+                    <span class="slot-elo">${playoffSlot.expectedElo} Elo</span>
                   </div>
                 `;
         }
@@ -448,6 +516,19 @@ function simulateGroupMonteCarlo(teams, simulations = 50000) {
 }
 
 /**
+ * Generate a heat-mapped table cell
+ */
+function heatCell(pct, isGold) {
+  if (pct === 0) return `<td class="heat-cell"><span>0%</span></td>`;
+  // Intensity: 0% = transparent, 100% = full color
+  const alpha = Math.min(pct / 100, 1) * 0.55;
+  const color = isGold
+    ? `rgba(245, 158, 11, ${alpha})`
+    : `rgba(59, 130, 246, ${alpha})`;
+  return `<td class="heat-cell"><div class="heat-bg" style="background:${color}"></div><span>${pct}%</span></td>`;
+}
+
+/**
  * Render group tables with expected standings from Monte Carlo simulation
  */
 function renderGroupTables() {
@@ -502,7 +583,7 @@ function renderGroupTables() {
       standings.sort((a, b) => b.points - a.points);
     }
 
-    // Generate table HTML
+    // Generate table HTML with heat map
     return `
       <div class="group-standings">
         <div class="group-standings-header">
@@ -515,12 +596,12 @@ function renderGroupTables() {
               <th>Team</th>
               <th>1st</th>
               <th>2nd</th>
-              <th>R32</th>
+              <th>Qualify</th>
               <th>R16</th>
               <th>QF</th>
               <th>SF</th>
               <th>F</th>
-              <th>🏆</th>
+              <th>W</th>
             </tr>
           </thead>
           <tbody>
@@ -545,14 +626,14 @@ function renderGroupTables() {
                       </span>
                     </div>
                   </td>
-                  <td class="standings-prob">${Math.round((team.pos1Prob || 0) * 100)}%</td>
-                  <td class="standings-prob">${Math.round((team.pos2Prob || 0) * 100)}%</td>
-                  <td class="standings-qualify ${r32Pct >= 80 ? 'high' : r32Pct >= 50 ? 'medium' : 'low'}">${r32Pct}%</td>
-                  <td class="standings-qualify ${r16Pct >= 50 ? 'high' : r16Pct >= 25 ? 'medium' : 'low'}">${r16Pct}%</td>
-                  <td class="standings-prob">${qfPct}%</td>
-                  <td class="standings-prob">${sfPct}%</td>
-                  <td class="standings-prob">${finalPct}%</td>
-                  <td class="standings-win">${winPct}%</td>
+                  ${heatCell(Math.round((team.pos1Prob || 0) * 100))}
+                  ${heatCell(Math.round((team.pos2Prob || 0) * 100))}
+                  ${heatCell(r32Pct)}
+                  ${heatCell(r16Pct)}
+                  ${heatCell(qfPct)}
+                  ${heatCell(sfPct)}
+                  ${heatCell(finalPct)}
+                  ${heatCell(winPct, true)}
                 </tr>
               `;
     }).join('')}
@@ -566,25 +647,35 @@ function renderGroupTables() {
 }
 
 /**
- * Render live results
+ * Render live results with WC team filter
  */
 function renderResults() {
   if (!resultsData || !resultsData.results) return;
 
   const container = document.getElementById('resultsList');
-  const results = resultsData.results;
+  let results = resultsData.results;
 
-  container.innerHTML = results.slice(0, 20).map(result => {
+  // Filter to WC teams if active
+  if (resultsFilter === 'wc') {
+    results = results.filter(r =>
+      WC_TEAM_CODES.has(r.team1) || WC_TEAM_CODES.has(r.team2)
+    );
+  }
+
+  container.innerHTML = results.slice(0, 25).map(result => {
     const flag1 = getFlagUrl(result.team1);
     const flag2 = getFlagUrl(result.team2);
     const changeClass = result.pointsExchanged > 0 ? 'positive' : 'negative';
+    const isWC1 = WC_TEAM_CODES.has(result.team1);
+    const isWC2 = WC_TEAM_CODES.has(result.team2);
+    const isWCMatch = isWC1 || isWC2;
 
     return `
-      <div class="result-card">
+      <div class="result-card ${isWCMatch ? 'wc-match' : ''}">
         <div class="result-team">
           ${flag1 ? `<img src="${flag1}" alt="${result.team1}" class="team-flag">` : ''}
           <div>
-            <div class="team-name">${result.team1Name}</div>
+            <div class="team-name">${result.team1Name}${isWC1 ? '<span class="wc-badge">WC</span>' : ''}</div>
             <div class="team-code">Elo: ${result.team1Rating}</div>
           </div>
         </div>
@@ -596,7 +687,7 @@ function renderResults() {
         <div class="result-team away">
           ${flag2 ? `<img src="${flag2}" alt="${result.team2}" class="team-flag">` : ''}
           <div>
-            <div class="team-name">${result.team2Name}</div>
+            <div class="team-name">${isWC2 ? '<span class="wc-badge">WC</span>' : ''}${result.team2Name}</div>
             <div class="team-code">Elo: ${result.team2Rating}</div>
           </div>
         </div>
@@ -1116,6 +1207,7 @@ function handleBracketClick(matchId, team) {
   clearDownstreamOverrides(matchId, knockout);
 
   renderBracket();
+  triggerRecalculationFlash();
 }
 
 /**
@@ -1138,6 +1230,28 @@ function clearDownstreamOverrides(matchId, knockout) {
 function resetBracket() {
   bracketOverrides = {};
   renderBracket();
+  triggerRecalculationFlash();
+}
+
+/**
+ * Triggers a visual flash on probability elements to indicate recalculation
+ */
+function triggerRecalculationFlash() {
+  // Use setTimeout to ensure DOM has updated if renderBracket triggered other renders
+  setTimeout(() => {
+    // We only need to flash if the user is looking at Group Tables or Playoffs
+    // But applying it globally to probability numbers is safe
+    const elementsToFlash = document.querySelectorAll('.standings-prob, .standings-qualify, .standings-win, .playoff-prob');
+
+    elementsToFlash.forEach(el => {
+      // Remove class if it already exists to restart animation
+      el.classList.remove('recalculating-flash');
+      // Trigger reflow
+      void el.offsetWidth;
+      // Add class back
+      el.classList.add('recalculating-flash');
+    });
+  }, 50);
 }
 
 /**

@@ -29,61 +29,72 @@
     </header>
 
     <nav class="tabs" id="tabs">
-      <button class="tab active" data-tab="sos">SoS Rankings</button>
-      <button class="tab" data-tab="groups">Groups</button>
-      <button class="tab" data-tab="tables">Group Tables</button>
-      <button class="tab" data-tab="results">Live Results</button>
+      <button class="tab active" data-tab="groups">Groups</button>
+      <button class="tab" data-tab="results">Results</button>
       <button class="tab" data-tab="playoffs">Playoffs</button>
       <button class="tab" data-tab="bracket">Bracket</button>
     </nav>
 
     <main class="main">
-      <!-- SoS Rankings Tab -->
-      <section class="tab-content active" id="tab-sos">
-        <div class="section-header">
-          <h2>Strength of Schedule Rankings</h2>
-          <p class="subtitle">Teams ranked by Group Opponent SoS (hardest schedule first)</p>
+      <!-- Groups Tab (consolidated: group cards + SoS table + simulation tables) -->
+      <section class="tab-content active" id="tab-groups">
+        <div class="view-toggle">
+          <button class="view-btn active" data-view="cards">Group Overview</button>
+          <button class="view-btn" data-view="sos">SoS Rankings</button>
+          <button class="view-btn" data-view="sim">Simulations</button>
         </div>
-        <div class="table-container">
-          <table class="data-table" id="sosTable">
-            <thead>
-              <tr>
-                <th>SoS Rank</th>
-                <th>Team</th>
-                <th>Group</th>
-                <th>Elo Rating</th>
-                <th>Group Opponent SoS</th>
-                <th>Overall Group Strength</th>
-              </tr>
-            </thead>
-            <tbody id="sosTableBody"></tbody>
-          </table>
+
+        <!-- Group Cards View -->
+        <div class="view-content active" id="view-cards">
+          <div class="section-header">
+            <h2>Group Strength Rankings</h2>
+            <p class="subtitle">Groups ranked by overall strength (average team Elo)</p>
+          </div>
+          <div class="groups-grid" id="groupsGrid"></div>
+        </div>
+
+        <!-- SoS Rankings View -->
+        <div class="view-content" id="view-sos">
+          <div class="section-header">
+            <h2>Strength of Schedule Rankings</h2>
+            <p class="subtitle">Teams ranked by Group Opponent SoS (hardest schedule first)</p>
+          </div>
+          <div class="group-filter" id="groupFilter"></div>
+          <div class="table-container">
+            <table class="data-table" id="sosTable">
+              <thead>
+                <tr>
+                  <th>SoS Rank</th>
+                  <th>Team</th>
+                  <th>Group</th>
+                  <th>Elo Rating</th>
+                  <th>Group Opponent SoS</th>
+                </tr>
+              </thead>
+              <tbody id="sosTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Simulation Tables View -->
+        <div class="view-content" id="view-sim">
+          <div class="section-header">
+            <h2>Tournament Simulations</h2>
+            <p class="subtitle">Bracket-aware simulation (50,000 tournaments) with knockout round probabilities</p>
+          </div>
+          <div class="groups-grid" id="groupTablesGrid"></div>
         </div>
       </section>
 
-      <!-- Groups Tab -->
-      <section class="tab-content" id="tab-groups">
-        <div class="section-header">
-          <h2>Group Strength Rankings</h2>
-          <p class="subtitle">Groups ranked by overall strength (average team Elo)</p>
-        </div>
-        <div class="groups-grid" id="groupsGrid"></div>
-      </section>
-
-      <!-- Group Tables Tab -->
-      <section class="tab-content" id="tab-tables">
-        <div class="section-header">
-          <h2>Expected Group Standings</h2>
-          <p class="subtitle">Bracket-aware simulation (50,000 tournaments) with full knockout round probabilities</p>
-        </div>
-        <div class="groups-grid" id="groupTablesGrid"></div>
-      </section>
-
-      <!-- Live Results Tab -->
+      <!-- Results Tab -->
       <section class="tab-content" id="tab-results">
         <div class="section-header">
           <h2>Latest Match Results</h2>
           <p class="subtitle">Recent matches affecting Elo ratings</p>
+          <div class="results-filter-toggle">
+            <button class="filter-btn active" id="filterWC" onclick="filterResults('wc')">World Cup Teams</button>
+            <button class="filter-btn" id="filterAll" onclick="filterResults('all')">All Matches</button>
+          </div>
         </div>
         <div class="results-list" id="resultsList"></div>
       </section>
@@ -102,7 +113,15 @@
         <div class="section-header">
           <h2>Knockout Bracket</h2>
           <p class="subtitle">Click any team to lock them as winner and recalculate the bracket</p>
-          <button class="reset-bracket-btn" id="resetBracketBtn" onclick="resetBracket()">Reset Bracket</button>
+          <div class="bracket-controls">
+            <button class="reset-bracket-btn" id="resetBracketBtn" onclick="resetBracket()">Reset Bracket</button>
+            <button class="collapse-r32-btn" id="collapseR32Btn" onclick="toggleR32()">Collapse R32</button>
+          </div>
+          <div class="bracket-legend">
+            <span class="legend-item"><span class="legend-dot projected-dot"></span> Projected (most likely)</span>
+            <span class="legend-item"><span class="legend-dot locked-dot"></span> Locked by you</span>
+            <span class="legend-item">"3rd (ABCDF)" = best 3rd-place team from those groups</span>
+          </div>
         </div>
         <div class="bracket-wrapper">
           <div class="bracket-container" id="bracketContainer"></div>
@@ -111,8 +130,7 @@
     </main>
 
     <footer class="footer">
-      <p>Data from <a href="https://www.eloratings.net" target="_blank">eloratings.net</a> • Auto-refreshes every 30
-        seconds</p>
+      <p>Data from <a href="https://www.eloratings.net" target="_blank">eloratings.net</a> • Auto-refreshes hourly</p>
     </footer>
   </div>
 
