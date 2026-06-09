@@ -12,18 +12,18 @@
                 "MX",
                 "ZA",
                 "KR",
-                "UEFA_D"
+                "CZ"
             ],
-            "notes": "UEFA_D: North Macedonia, Denmark, Czechia, or Ireland"
+            "notes": ""
         },
         "B": {
             "teams": [
                 "CA",
-                "UEFA_A",
+                "BA",
                 "QA",
                 "CH"
             ],
-            "notes": "UEFA_A: Italy, Northern Ireland, Wales, or Bosnia & Herzegovina"
+            "notes": ""
         },
         "C": {
             "teams": [
@@ -39,9 +39,9 @@
                 "US",
                 "PY",
                 "AU",
-                "UEFA_C"
+                "TR"
             ],
-            "notes": "UEFA_C: Turkey, Romania, Slovakia, or Kosovo"
+            "notes": ""
         },
         "E": {
             "teams": [
@@ -56,10 +56,10 @@
             "teams": [
                 "NL",
                 "JP",
-                "UEFA_B",
+                "SE",
                 "TN"
             ],
-            "notes": "UEFA_B: Ukraine, Sweden, Poland, or Albania"
+            "notes": ""
         },
         "G": {
             "teams": [
@@ -84,9 +84,9 @@
                 "FR",
                 "SN",
                 "NO",
-                "FIFA_2"
+                "IQ"
             ],
-            "notes": "FIFA_2: Bolivia, Suriname, or Iraq (Intercontinental Playoff 2)"
+            "notes": ""
         },
         "J": {
             "teams": [
@@ -102,9 +102,9 @@
                 "PT",
                 "UZ",
                 "CO",
-                "FIFA_1"
+                "CD"
             ],
-            "notes": "FIFA_1: Jamaica, New Caledonia, or DR Congo (Intercontinental Playoff 1)"
+            "notes": ""
         },
         "L": {
             "teams": [
@@ -117,68 +117,8 @@
         }
     },
     "playoffs": {
-        "intercontinental": {
-            "bracket1": {
-                "seeded": "CD",
-                "unseeded": [
-                    "JM",
-                    "NC"
-                ],
-                "winner": "FIFA_1",
-                "destinationGroup": "K"
-            },
-            "bracket2": {
-                "seeded": "IQ",
-                "unseeded": [
-                    "BO",
-                    "SR"
-                ],
-                "winner": "FIFA_2",
-                "destinationGroup": "I"
-            }
-        },
-        "uefa": {
-            "pathA": {
-                "teams": [
-                    "IT",
-                    "EI",
-                    "WA",
-                    "BA"
-                ],
-                "winner": "UEFA_A",
-                "destinationGroup": "B"
-            },
-            "pathB": {
-                "teams": [
-                    "UA",
-                    "SE",
-                    "PL",
-                    "AL"
-                ],
-                "winner": "UEFA_B",
-                "destinationGroup": "F"
-            },
-            "pathC": {
-                "teams": [
-                    "TR",
-                    "RO",
-                    "SK",
-                    "KO"
-                ],
-                "winner": "UEFA_C",
-                "destinationGroup": "D"
-            },
-            "pathD": {
-                "teams": [
-                    "NM",
-                    "DK",
-                    "CZ",
-                    "IE"
-                ],
-                "winner": "UEFA_D",
-                "destinationGroup": "A"
-            }
-        }
+        "intercontinental": {},
+        "uefa": {}
     },
     "knockout": {
         "r32": [

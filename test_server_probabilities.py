@@ -33,7 +33,7 @@ def get_match_probabilities(team_elo: float, opp_elo: float) -> Dict[str, float]
     """Three-outcome model for group matches (win/draw/loss)."""
     win_expectancy = 1 / (1 + math.pow(10, (opp_elo - team_elo) / 400))
     elo_diff = abs(team_elo - opp_elo)
-    draw_prob = max(0.15, 0.27 - elo_diff * 0.0004)
+    draw_prob = 0.15 + 0.12 * math.exp(-0.004 * elo_diff)
     win_prob = win_expectancy * (1 - draw_prob)
     loss_prob = (1 - win_expectancy) * (1 - draw_prob)
     return {'win': win_prob, 'draw': draw_prob, 'loss': loss_prob}

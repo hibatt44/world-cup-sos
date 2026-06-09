@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Methodology | World Cup 2026 SoS Room</title>
+  <meta name="description" content="How the World Cup 2026 strength-of-schedule dashboard calculates Elo difficulty, advancement odds, and title probabilities.">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']]
+      },
+      svg: {
+        fontCache: 'global'
+      }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+
+<body>
+  <main class="shell methodology-shell">
+    <header class="hero" id="top">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand" href="index.html">World Cup SoS Room</a>
+        <div class="nav-links">
+          <a href="index.html">Dashboard</a>
+          <a aria-current="page" href="methodology.html">Methodology</a>
+        </div>
+      </nav>
+    </header>
+
+    <section class="section methodology-hero" aria-labelledby="methodologyTitle">
+      <p class="eyebrow">Calculation notes</p>
+      <h1 id="methodologyTitle">Methodology</h1>
+      <p class="lede">The dashboard uses live Elo ratings, the confirmed 2026 World Cup draw, and Monte Carlo simulations to compare group paths and tournament probabilities.</p>
+    </section>
+
+    <section class="section methodology-grid" aria-label="Methodology details">
+      <article class="method-card">
+        <h2>Data inputs</h2>
+        <p>Ratings and recent match movement are fetched from eloratings.net. Team names are matched from the Elo team file, and World Cup groups plus knockout slots come from the local tournament structure in this project.</p>
+      </article>
+
+      <article class="method-card">
+        <h2>Rest-of-group SoS</h2>
+        <p>For each team, strength of schedule is the average Elo of its three group opponents. The team's own Elo is excluded, which keeps a strong team from making its own path look harder or a weak team from making it look easier.</p>
+        <div class="formula" aria-label="Rest-of-group strength of schedule formula">
+          \[
+            \mathrm{SoS}_{team} = \operatorname{round}\left(\frac{Elo_{opp1} + Elo_{opp2} + Elo_{opp3}}{3}\right)
+          \]
+        </div>
+      </article>
+
+      <article class="method-card">
+        <h2>Group strength</h2>
+        <p>Group difficulty is the rounded average Elo of all four teams in a group. This is useful for comparing whole groups, while rest-of-group SoS is better for comparing each team's specific path.</p>
+        <div class="formula" aria-label="Group strength formula">
+          \[
+            \mathrm{Group\ Strength} = \operatorname{round}\left(\frac{\sum_{i=1}^{4} Elo_i}{4}\right)
+          \]
+        </div>
+      </article>
+
+      <article class="method-card">
+        <h2>Match probabilities</h2>
+        <p>Head-to-head win expectancy uses the standard Elo curve. Group matches also include a simplifying draw assumption: draws start at 27% for even teams, then decay smoothly toward 15% as the Elo gap grows.</p>
+        <div class="formula" aria-label="Elo win expectancy formula">
+          \[
+            P(A) = \frac{1}{1 + 10^{(Elo_B - Elo_A)/400}}
+          \]
+        </div>
+        <div class="formula" aria-label="Draw probability formula">
+          \[
+            P(draw) = 0.15 + 0.12e^{-0.004\left|Elo_A - Elo_B\right|}
+          \]
+        </div>
+      </article>
+
+      <article class="method-card">
+        <h2>Simulations</h2>
+        <p>The tournament model runs 50,000 bracket-aware simulations. Group matches can end in wins, draws, or losses; knockout matches use the Elo win expectancy directly because every knockout match must produce a winner.</p>
+      </article>
+
+      <article class="method-card">
+        <h2>Advancement rules</h2>
+        <p>In each simulation, group tables are sorted by points, then goal difference, then Elo as a tiebreaker proxy. The top two teams in each group advance, followed by the eight best third-place teams across the twelve groups.</p>
+      </article>
+
+      <article class="method-card">
+        <h2>Playoff placeholders</h2>
+        <p>If a group contains a playoff placeholder, the model estimates the slot's Elo by weighting each possible playoff winner by its chance to qualify. That expected Elo is then used in SoS and tournament simulations.</p>
+      </article>
+
+      <article class="method-card">
+        <h2>What to read carefully</h2>
+        <p>These are model probabilities, not predictions with certainty. They depend on the latest Elo feed, a simplified draw-rate assumption, simplified score generation, and Elo-based tiebreakers where the real tournament would use the full FIFA tiebreaking procedure.</p>
+      </article>
+    </section>
+
+    <section class="section methodology-cta" aria-label="Back to dashboard">
+      <a class="button primary" href="index.html">Back to dashboard</a>
+    </section>
+  </main>
+</body>
+
+</html>

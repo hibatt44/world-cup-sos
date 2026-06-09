@@ -39,15 +39,15 @@ def get_match_probabilities(team_elo: float, opp_elo: float) -> Dict[str, float]
 
     The model:
     - Base win expectancy from standard Elo formula
-    - Draw probability: 27% at equal ratings, decreasing with Elo gap (min 15%)
+    - Draw probability: 27% at equal ratings, decaying smoothly toward 15%
     - Redistributes win expectancy across three outcomes
     """
     # Base win probability using Elo formula
     win_expectancy = 1 / (1 + math.pow(10, (opp_elo - team_elo) / 400))
 
-    # Draw probability: ~27% at equal ratings, decreasing with Elo gap (min 15%)
+    # Draw probability: ~27% at equal ratings, decaying smoothly toward 15%
     elo_diff = abs(team_elo - opp_elo)
-    draw_prob = max(0.15, 0.27 - elo_diff * 0.0004)
+    draw_prob = 0.15 + 0.12 * math.exp(-0.004 * elo_diff)
 
     # Redistribute win expectancy to three outcomes
     win_prob = win_expectancy * (1 - draw_prob)
@@ -181,13 +181,12 @@ def test_three_outcome_model(results: TestResults):
         f"Win: {probs['win']:.6f}, Loss: {probs['loss']:.6f}"
     )
 
-    # Test 3: Large Elo gap - draw should hit floor of 15%
-    # Gap of 300+ should give draw = 0.27 - 300*0.0004 = 0.27 - 0.12 = 0.15
+    # Test 3: Large Elo gap - draw should continue approaching the 15% floor
     probs = get_match_probabilities(1900, 1600)
     results.add(
-        "300+ point gap: draw at minimum 15%",
-        abs(probs['draw'] - 0.15) < 0.0001,
-        f"Expected 0.15, got {probs['draw']:.6f}"
+        "300 point gap: draw above 15% asymptote",
+        0.15 < probs['draw'] < 0.19,
+        f"Expected draw between 0.15 and 0.19, got {probs['draw']:.6f}"
     )
 
     # Test 4: Probabilities sum to 1 with different ratings
@@ -225,17 +224,17 @@ def test_draw_probability_formula(results: TestResults):
     # Test draw probability at various Elo differences
     test_cases = [
         (0, 0.27),      # Equal ratings
-        (100, 0.23),    # 0.27 - 100*0.0004 = 0.23
-        (200, 0.19),    # 0.27 - 200*0.0004 = 0.19
-        (300, 0.15),    # 0.27 - 300*0.0004 = 0.15 (at floor)
-        (400, 0.15),    # Floor
-        (500, 0.15),    # Floor
+        (100, 0.15 + 0.12 * math.exp(-0.004 * 100)),
+        (200, 0.15 + 0.12 * math.exp(-0.004 * 200)),
+        (300, 0.15 + 0.12 * math.exp(-0.004 * 300)),
+        (400, 0.15 + 0.12 * math.exp(-0.004 * 400)),
+        (500, 0.15 + 0.12 * math.exp(-0.004 * 500)),
     ]
 
     for diff, expected_draw in test_cases:
         probs = get_match_probabilities(1600 + diff, 1600)
         results.add(
-            f"Draw prob at {diff} point gap = {expected_draw*100:.0f}%",
+            f"Draw prob at {diff} point gap = {expected_draw*100:.1f}%",
             abs(probs['draw'] - expected_draw) < 0.0001,
             f"Expected {expected_draw:.4f}, got {probs['draw']:.6f}"
         )
@@ -400,7 +399,7 @@ def display_probability_table():
     print("=" * 70)
     print("\nNotes:")
     print("- 'Win Exp' is raw Elo expectancy before draw adjustment")
-    print("- Draw probability: max(0.15, 0.27 - diff * 0.0004)")
+    print("- Draw probability: 0.15 + 0.12 * exp(-0.004 * diff)")
     print("- Win/Loss redistribute the remaining probability")
 
 
@@ -413,7 +412,7 @@ def main():
     print("the Soccer Elo World Cup 2026 analyzer application.")
     print("\nFormulas tested:")
     print("1. Basic Elo: P = 1 / (1 + 10^((Elo2 - Elo1) / 400))")
-    print("2. Draw prob: max(0.15, 0.27 - |diff| * 0.0004)")
+    print("2. Draw prob: 0.15 + 0.12 * exp(-0.004 * |diff|)")
     print("3. Win prob: win_expectancy * (1 - draw_prob)")
     print("4. Loss prob: (1 - win_expectancy) * (1 - draw_prob)")
 

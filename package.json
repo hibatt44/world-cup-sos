@@ -1,7 +1,7 @@
 {
-  "name": "world-cup-sos",
+  "name": "world-cup-launch-room",
   "version": "1.0.0",
-  "description": "World Cup 2026 Strength of Schedule Calculator - Analyzes group compositions, simulates tournaments, and calculates win probabilities using Elo ratings",
+  "description": "World Cup 2026 launch dashboard powered by Elo ratings, group simulations, playoff paths, and matchup probabilities",
   "main": "server.js",
   "engines": {
     "node": ">=18.0.0"

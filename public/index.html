@@ -4,135 +4,128 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>World Cup 2026 - Strength of Schedule</title>
-  <meta name="description" content="Real-time Strength of Schedule calculator for 2026 FIFA World Cup teams">
+  <title>World Cup 2026 SoS Room</title>
+  <meta name="description" content="A live World Cup 2026 strength-of-schedule dashboard powered by Elo ratings.">
   <link rel="stylesheet" href="styles.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="header-content">
-        <h1 class="logo">
-          <span class="logo-icon">⚽</span>
-          World Cup 2026 SoS
-        </h1>
-        <div class="header-controls">
-          <div class="live-indicator" id="liveIndicator">
-            <span class="pulse"></span>
-            <span>LIVE</span>
-          </div>
-          <div class="last-update" id="lastUpdate">--</div>
+  <main class="shell">
+    <header class="hero" id="top">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand" href="#top">World Cup SoS Room</a>
+        <div class="nav-links">
+          <a href="methodology.html">Methodology</a>
         </div>
-      </div>
+        <div class="status-pill" id="statusPill">Loading live Elo</div>
+      </nav>
     </header>
 
-    <nav class="tabs" id="tabs">
-      <button class="tab active" data-tab="groups">Groups</button>
-      <button class="tab" data-tab="results">Results</button>
-      <button class="tab" data-tab="playoffs">Playoffs</button>
-      <button class="tab" data-tab="bracket">Bracket</button>
-    </nav>
-
-    <main class="main">
-      <!-- Groups Tab (consolidated: group cards + SoS table + simulation tables) -->
-      <section class="tab-content active" id="tab-groups">
-        <div class="view-toggle">
-          <button class="view-btn active" data-view="cards">Group Overview</button>
-          <button class="view-btn" data-view="sos">SoS Rankings</button>
-          <button class="view-btn" data-view="sim">Simulations</button>
+    <section class="section lead-board" id="groupBoard" aria-labelledby="groupBoardTitle">
+      <div class="section-heading split">
+        <div>
+          <h1 id="groupBoardTitle">Group Difficulty Board</h1>
+          <p class="section-note">Compare every World Cup group by average Elo, then see each team's chance to advance from that group.</p>
         </div>
+        <a class="button" href="#groups">Inspect paths</a>
+      </div>
+      <div class="group-board" id="groupBoardGrid" aria-live="polite"></div>
+    </section>
 
-        <!-- Group Cards View -->
-        <div class="view-content active" id="view-cards">
-          <div class="section-header">
-            <h2>Group Strength Rankings</h2>
-            <p class="subtitle">Groups ranked by overall strength (average team Elo)</p>
-          </div>
-          <div class="groups-grid" id="groupsGrid"></div>
-        </div>
-
-        <!-- SoS Rankings View -->
-        <div class="view-content" id="view-sos">
-          <div class="section-header">
-            <h2>Strength of Schedule Rankings</h2>
-            <p class="subtitle">Teams ranked by Group Opponent SoS (hardest schedule first)</p>
-          </div>
-          <div class="group-filter" id="groupFilter"></div>
-          <div class="table-container">
-            <table class="data-table" id="sosTable">
-              <thead>
-                <tr>
-                  <th>SoS Rank</th>
-                  <th>Team</th>
-                  <th>Group</th>
-                  <th>Elo Rating</th>
-                  <th>Group Opponent SoS</th>
-                </tr>
-              </thead>
-              <tbody id="sosTableBody"></tbody>
-            </table>
+    <section class="hero-grid section" aria-labelledby="pathInspectorTitle">
+        <div class="hero-copy">
+          <p class="eyebrow">Strength of schedule</p>
+          <h2 id="pathInspectorTitle">Path inspector</h2>
+          <p class="lede">Rest-of-group SoS measures the average Elo of a team’s three group opponents. It answers the
+            question for every team without letting a strong or weak team soften its own group rating.</p>
+          <div class="team-spotlight" id="teamSpotlight" aria-live="polite"></div>
+          <div class="hero-actions">
+            <a class="button primary" href="#groupBoard">Compare groups</a>
+            <a class="button" href="#groups">Inspect paths</a>
           </div>
         </div>
 
-        <!-- Simulation Tables View -->
-        <div class="view-content" id="view-sim">
-          <div class="section-header">
-            <h2>Tournament Simulations</h2>
-            <p class="subtitle">Bracket-aware simulation (50,000 tournaments) with knockout round probabilities</p>
+        <aside class="hero-panel" aria-label="Tournament snapshot">
+          <div>
+            <span class="label">Opening frame</span>
+            <strong id="countdownText">World Cup 2026</strong>
           </div>
-          <div class="groups-grid" id="groupTablesGrid"></div>
-        </div>
-      </section>
-
-      <!-- Results Tab -->
-      <section class="tab-content" id="tab-results">
-        <div class="section-header">
-          <h2>Latest Match Results</h2>
-          <p class="subtitle">Recent matches affecting Elo ratings</p>
-          <div class="results-filter-toggle">
-            <button class="filter-btn active" id="filterWC" onclick="filterResults('wc')">World Cup Teams</button>
-            <button class="filter-btn" id="filterAll" onclick="filterResults('all')">All Matches</button>
+          <div class="metric-row">
+            <div>
+              <span class="label">Groups</span>
+              <strong id="groupCount">12</strong>
+            </div>
+            <div>
+              <span class="label">Teams</span>
+              <strong id="teamCount">48</strong>
+            </div>
+            <div>
+              <span class="label">Primary SoS</span>
+              <strong>ROG</strong>
+            </div>
           </div>
-        </div>
-        <div class="results-list" id="resultsList"></div>
-      </section>
+          <p id="lastUpdated">Waiting for live data...</p>
+        </aside>
+    </section>
 
-      <!-- Playoffs Tab -->
-      <section class="tab-content" id="tab-playoffs">
-        <div class="section-header">
-          <h2>Remaining Qualification</h2>
-          <p class="subtitle">6 spots remain via playoffs (March 2026)</p>
-        </div>
-        <div class="playoffs-container" id="playoffsContainer"></div>
-      </section>
+    <section class="section" aria-labelledby="contendersTitle">
+      <div class="section-heading">
+        <p class="eyebrow">Probability context</p>
+        <h2 id="contendersTitle">Title favorites, for reference</h2>
+      </div>
+      <div class="contender-grid" id="contenderGrid" aria-live="polite"></div>
+    </section>
 
-      <!-- Bracket Tab -->
-      <section class="tab-content" id="tab-bracket">
-        <div class="section-header">
-          <h2>Knockout Bracket</h2>
-          <p class="subtitle">Click any team to lock them as winner and recalculate the bracket</p>
-          <div class="bracket-controls">
-            <button class="reset-bracket-btn" id="resetBracketBtn" onclick="resetBracket()">Reset Bracket</button>
-            <button class="collapse-r32-btn" id="collapseR32Btn" onclick="toggleR32()">Collapse R32</button>
-          </div>
-          <div class="bracket-legend">
-            <span class="legend-item"><span class="legend-dot projected-dot"></span> Projected (most likely)</span>
-            <span class="legend-item"><span class="legend-dot locked-dot"></span> Locked by you</span>
-            <span class="legend-item">"3rd (ABCDF)" = best 3rd-place team from those groups</span>
-          </div>
+    <section class="section" id="groups" aria-labelledby="groupsTitle">
+      <div class="section-heading split">
+        <div>
+          <p class="eyebrow">Group difficulty</p>
+          <h2 id="groupsTitle">Rest-of-group SoS</h2>
         </div>
-        <div class="bracket-wrapper">
-          <div class="bracket-container" id="bracketContainer"></div>
-        </div>
-      </section>
-    </main>
+        <select id="groupSelect" aria-label="Choose a group"></select>
+      </div>
+      <div class="group-stage">
+        <div class="group-detail" id="groupDetail"></div>
+        <div class="group-rankings" id="groupRankings"></div>
+      </div>
+    </section>
 
-    <footer class="footer">
-      <p>Data from <a href="https://www.eloratings.net" target="_blank">eloratings.net</a> • Auto-refreshes hourly</p>
-    </footer>
-  </div>
+    <section class="section two-column" aria-labelledby="playoffTitle">
+      <div>
+        <div class="section-heading">
+          <p class="eyebrow">Final field</p>
+          <h2 id="playoffTitle">No placeholders left in the draw</h2>
+        </div>
+        <div class="playoff-list" id="playoffList"></div>
+      </div>
+
+      <div class="match-lab" id="matchLab">
+        <div class="section-heading">
+          <p class="eyebrow">Matchup lab</p>
+          <h2>Compare any two teams</h2>
+        </div>
+        <div class="lab-controls">
+          <label>
+            Team A
+            <select id="teamA"></select>
+          </label>
+          <label>
+            Team B
+            <select id="teamB"></select>
+          </label>
+        </div>
+        <div class="prob-card" id="matchResult"></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="resultsTitle">
+      <div class="section-heading">
+        <p class="eyebrow">Recent movement</p>
+        <h2 id="resultsTitle">Latest Elo-changing matches</h2>
+      </div>
+      <div class="results-strip" id="resultsStrip"></div>
+    </section>
+  </main>
 
   <script src="app.js"></script>
 </body>

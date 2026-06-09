@@ -1,14 +1,15 @@
-# World Cup 2026 Strength of Schedule Calculator
+# World Cup 2026 Launch Room
 
-A real-time World Cup 2026 tournament analyzer that calculates strength of schedule, simulates group stages, and predicts tournament outcomes using Elo ratings.
+A live World Cup 2026 dashboard for reading the tournament before kickoff. It keeps the original Elo probability algorithm, but rebuilds the app around a fresh launch-room experience: contenders, group heat, playoff uncertainty, recent Elo movement, and an interactive matchup lab.
 
 ## Features
 
 - **Live Elo Ratings**: Fetches current team ratings from eloratings.net
-- **Strength of Schedule**: Ranks teams by opponent difficulty
-- **Monte Carlo Simulation**: 50,000 iterations per group for accurate probabilities
-- **Full Tournament Simulation**: Bracket-aware simulation from groups to final
-- **Playoff Predictions**: Expected Elo calculations for undecided playoff spots
+- **Launch Dashboard**: Shows champion contenders, hardest group paths, rest-of-group SoS, and recent results
+- **Rest-of-Group SoS**: Ranks every team by the average Elo of its three group opponents
+- **Matchup Lab**: Compares any two teams with the existing Elo win/draw/loss formula
+- **Monte Carlo Simulation**: 50,000 bracket-aware tournament runs using the existing tournament model
+- **Final Field Modeling**: Uses the confirmed 48-team draw with no expected playoff placeholders
 
 ## Quick Start
 
@@ -69,14 +70,15 @@ No environment variables are required. The app uses:
 soccer_elo/
 ├── server.js              # Express server & API endpoints
 ├── lib/
+│   ├── elo.js             # Shared Elo probability algorithm
 │   ├── sosCalculator.js   # SoS calculations & group simulations
 │   └── bracketSimulator.js # Full tournament Monte Carlo
 ├── data/
 │   └── worldCupGroups.json # Tournament structure
 ├── public/
-│   ├── index.html         # Frontend UI
-│   ├── app.js             # Client-side JavaScript
-│   └── styles.css         # Styling
+│   ├── index.html         # Launch-room frontend shell
+│   ├── app.js             # Dashboard rendering and matchup lab
+│   └── styles.css         # Responsive dashboard styling
 ├── test_win_probability.py      # Unit tests for probability formulas
 └── test_server_probabilities.py # Integration tests vs live server
 ```
@@ -89,7 +91,7 @@ P(Team1 wins) = 1 / (1 + 10^((Elo2 - Elo1) / 400))
 ```
 
 ### Three-Outcome Model (Group Matches)
-- Draw probability: `max(0.15, 0.27 - |diff| * 0.0004)`
+- Draw probability: `0.15 + 0.12 * exp(-0.004 * |diff|)`
 - Win probability: `win_expectancy * (1 - draw_prob)`
 - Loss probability: `(1 - win_expectancy) * (1 - draw_prob)`
 

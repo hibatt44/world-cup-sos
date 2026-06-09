@@ -17,10 +17,12 @@ let cache = {
 // Separate cache for Monte Carlo simulation (computed on rankings change)
 let monteCarloCache = {
     data: null,
-    rankingsTimestamp: 0  // Track which rankings version this was computed for
+    rankingsTimestamp: 0,
+    resultsTimestamp: 0
 };
 
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const WORLD_CUP_START_DATE = '2026-06-11';
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -123,7 +125,115 @@ function parseResults(tsv) {
         });
     }
 
-    return results.slice(0, 50); // Return latest 50 results
+    return results.slice(0, 250); // Keep enough runway for the full group stage
+}
+
+function getGroupLookup(groupData) {
+    const lookup = {};
+
+    for (const [groupName, groupInfo] of Object.entries(groupData.groups)) {
+        for (const teamCode of groupInfo.teams) {
+            lookup[teamCode] = groupName;
+        }
+    }
+
+    return lookup;
+}
+
+function isWorldCupGroupResult(result, groupLookup) {
+    const team1Group = groupLookup[result.team1];
+    const team2Group = groupLookup[result.team2];
+
+    return Boolean(
+        team1Group &&
+        team1Group === team2Group &&
+        result.date >= WORLD_CUP_START_DATE &&
+        result.tournament === 'WC'
+    );
+}
+
+function getCompletedGroupMatches(groupData, results) {
+    const groupLookup = getGroupLookup(groupData);
+    const completed = {};
+
+    for (const result of results) {
+        if (!isWorldCupGroupResult(result, groupLookup)) continue;
+
+        const group = groupLookup[result.team1];
+        if (!completed[group]) completed[group] = [];
+        completed[group].push({
+            group,
+            date: result.date,
+            team1: result.team1,
+            team2: result.team2,
+            score1: result.score1,
+            score2: result.score2
+        });
+    }
+
+    return completed;
+}
+
+function calculateGroupRecords(groupData, completedGroupMatches, ratings, teams) {
+    const records = {};
+
+    for (const [groupName, groupInfo] of Object.entries(groupData.groups)) {
+        const groupRecords = groupInfo.teams.map(code => ({
+            code,
+            name: teams[code] || code,
+            elo: ratings[code] || 0,
+            played: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            gf: 0,
+            ga: 0,
+            gd: 0,
+            points: 0
+        }));
+        const byCode = Object.fromEntries(groupRecords.map(record => [record.code, record]));
+
+        for (const match of completedGroupMatches[groupName] || []) {
+            applyResultToRecord(byCode[match.team1], byCode[match.team2], match.score1, match.score2);
+        }
+
+        records[groupName] = groupRecords.sort((a, b) => {
+            if (b.points !== a.points) return b.points - a.points;
+            if (b.gd !== a.gd) return b.gd - a.gd;
+            if (b.gf !== a.gf) return b.gf - a.gf;
+            return b.elo - a.elo;
+        });
+    }
+
+    return records;
+}
+
+function applyResultToRecord(team1, team2, score1, score2) {
+    if (!team1 || !team2) return;
+
+    team1.played++;
+    team2.played++;
+    team1.gf += score1;
+    team1.ga += score2;
+    team2.gf += score2;
+    team2.ga += score1;
+    team1.gd = team1.gf - team1.ga;
+    team2.gd = team2.gf - team2.ga;
+
+    if (score1 > score2) {
+        team1.wins++;
+        team1.points += 3;
+        team2.losses++;
+    } else if (score2 > score1) {
+        team2.wins++;
+        team2.points += 3;
+        team1.losses++;
+    } else {
+        team1.draws++;
+        team2.draws++;
+        team1.points++;
+        team2.points++;
+    }
 }
 
 /**
@@ -188,12 +298,18 @@ app.get('/api/sos', async (req, res) => {
     try {
         const rankings = await getCachedData('rankings', 'World.tsv', parseRankings);
         const teams = await getCachedData('teams', 'en.teams.tsv', parseTeams);
+        const results = await getCachedData('results', 'latest.tsv', parseResults);
 
         const sosData = sosCalculator.calculateAllSoS(worldCupGroups, rankings.map);
         const playoffSim = sosCalculator.simulatePlayoffSoS(worldCupGroups, rankings.map);
+        const completedGroupMatches = getCompletedGroupMatches(worldCupGroups, results);
+        const groupRecords = calculateGroupRecords(worldCupGroups, completedGroupMatches, rankings.map, teams);
 
-        // Run bracket-aware tournament simulation only if rankings have changed
-        if (monteCarloCache.rankingsTimestamp !== cache.rankings.timestamp) {
+        // Run bracket-aware tournament simulation only if rankings or group results have changed
+        if (
+            monteCarloCache.rankingsTimestamp !== cache.rankings.timestamp ||
+            monteCarloCache.resultsTimestamp !== cache.results.timestamp
+        ) {
             console.log('Running bracket-aware tournament simulation (50,000 iterations)...');
             const startTime = Date.now();
             monteCarloCache.data = bracketSimulator.simulateTournament(
@@ -201,9 +317,11 @@ app.get('/api/sos', async (req, res) => {
                 rankings.map,
                 sosData.expectedElos,
                 teams,
-                50000
+                50000,
+                completedGroupMatches
             );
             monteCarloCache.rankingsTimestamp = cache.rankings.timestamp;
+            monteCarloCache.resultsTimestamp = cache.results.timestamp;
             console.log(`Tournament simulation completed in ${Date.now() - startTime}ms`);
         }
 
@@ -213,14 +331,14 @@ app.get('/api/sos', async (req, res) => {
             name: teams[t.code] || t.code
         }));
 
-        // Enrich playoff simulation with team names
-        for (const bracket of Object.values(playoffSim.intercontinental)) {
+        // Enrich playoff simulation with team names when unresolved paths exist.
+        for (const bracket of Object.values(playoffSim.intercontinental || {})) {
             bracket.teams = bracket.teams.map(t => ({
                 ...t,
                 name: teams[t.code] || t.code
             }));
         }
-        for (const path of Object.values(playoffSim.uefa)) {
+        for (const path of Object.values(playoffSim.uefa || {})) {
             path.teams = path.teams.map(t => ({
                 ...t,
                 name: teams[t.code] || t.code
@@ -232,6 +350,8 @@ app.get('/api/sos', async (req, res) => {
             worldCupGroups,
             playoffSimulation: playoffSim,
             groupSimulation: monteCarloCache.data,  // Add pre-computed simulation
+            groupRecords,
+            completedGroupMatches,
             cacheAge: Date.now() - cache.rankings.timestamp,
             lastUpdated: new Date().toISOString()
         });

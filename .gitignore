@@ -28,3 +28,9 @@ __pycache__/
 
 # Claude Code
 .claude/
+
+# Codex workspace metadata
+.codex/
+
+# Local screenshots
+*.png
