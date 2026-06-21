@@ -930,11 +930,11 @@ select {
 .bracket-team-search input {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--green) 45%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--green) 7%, var(--panel));
   color: var(--ink);
-  padding: 5px 1px;
+  padding: 6px 8px;
   font: inherit;
   font-size: 0.78rem;
   letter-spacing: 0;
@@ -1021,36 +1021,50 @@ select {
 
 .path-summary {
   display: grid;
-  grid-template-columns: minmax(250px, 0.6fr) minmax(0, 1.4fr);
-  gap: 20px;
+  grid-template-columns: minmax(190px, 0.7fr) minmax(0, 2.3fr);
+  align-items: stretch;
+  gap: 10px;
   border: 1px solid rgba(15, 143, 95, 0.28);
   border-radius: var(--radius);
   background: var(--field);
-  padding: 22px;
+  padding: 10px;
 }
 
-.path-summary-copy h2 {
-  margin: 5px 0 7px;
-  font-size: clamp(1.7rem, 4vw, 2.8rem);
+.path-summary-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid var(--line);
+  padding: 5px 12px 5px 6px;
 }
 
-.path-summary-copy p {
-  margin: 0;
+.path-summary-copy strong,
+.path-summary-copy small {
+  display: block;
+}
+
+.path-summary-copy strong {
+  margin-top: 2px;
+  font-size: 1.05rem;
+}
+
+.path-summary-copy small {
+  margin-top: 1px;
   color: var(--muted);
-  line-height: 1.45;
+  font-size: 0.72rem;
 }
 
 .path-prob-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(90px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(6, minmax(72px, 1fr));
+  gap: 5px;
 }
 
 .path-prob-strip div {
   border: 1px solid rgba(255, 255, 255, 0.75);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.7);
-  padding: 12px;
+  padding: 8px;
 }
 
 .path-prob-strip span,
@@ -1065,8 +1079,8 @@ select {
 }
 
 .path-prob-strip strong {
-  margin-top: 3px;
-  font-size: 1.25rem;
+  margin-top: 2px;
+  font-size: 1rem;
 }
 
 .bracket-scroll {
@@ -1253,6 +1267,11 @@ select {
   font-size: 0.78rem;
 }
 
+.bracket-team.has-locked-slot {
+  background: color-mix(in srgb, var(--green) 7%, var(--panel));
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--green) 38%, transparent);
+}
+
 .bracket-team:hover,
 .bracket-team:focus-visible {
   outline: 2px solid var(--green);
@@ -1262,6 +1281,7 @@ select {
 .bracket-team.selected {
   background: var(--green);
   color: #fff;
+  box-shadow: none;
 }
 
 .bracket-team span {
@@ -1285,8 +1305,7 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .bracket-toolbar,
-  .path-summary {
+  .bracket-toolbar {
     grid-template-columns: 1fr;
   }
 
@@ -1307,6 +1326,16 @@ select {
 }
 
 @media (max-width: 700px) {
+  .path-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .path-summary-copy {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+  }
+
   .bracket-scroll {
     overflow-x: visible;
   }

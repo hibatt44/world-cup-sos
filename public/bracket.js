@@ -1,4 +1,4 @@
-const state = { data: null, teams: [], selectedTeam: 'US', focused: false };
+const state = { data: null, teams: [], lockedTeams: new Set(), selectedTeam: 'US', focused: false };
 const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   weekday: 'short',
@@ -40,6 +40,7 @@ async function init() {
     assertCompatibleForecast(state.data);
     state.teams = Object.values(state.data.groupSimulation || {}).flat()
       .sort((a, b) => a.name.localeCompare(b.name));
+    state.lockedTeams = lockedStartingTeams(state.data.bracketForecast?.r32 || []);
     state.selectedTeam = state.teams.some(team => team.code === 'US') ? 'US' : state.teams[0]?.code;
     setupInteractions();
     render();
@@ -49,6 +50,12 @@ async function init() {
     els.status.textContent = 'Simulation unavailable';
     els.board.replaceChildren(createMessage(error.message));
   }
+}
+
+function lockedStartingTeams(matches) {
+  return new Set(matches.flatMap(match => (match.slots || [])
+    .filter(slot => slot.contenders.length === 1 && slot.contenders[0].probability >= 0.999)
+    .map(slot => slot.contenders[0].code)));
 }
 
 function assertCompatibleForecast(data) {
@@ -69,7 +76,6 @@ function setupInteractions() {
     );
     if (!team) return;
     state.selectedTeam = team.code;
-    event.target.value = '';
     render();
   });
   els.focus.addEventListener('change', event => {
@@ -86,8 +92,14 @@ function setupInteractions() {
 }
 
 function render() {
+  syncSelectedTeamControl();
   renderSummary();
   renderBracket();
+}
+
+function syncSelectedTeamControl() {
+  const team = state.teams.find(candidate => candidate.code === state.selectedTeam);
+  if (team && els.search) els.search.value = team.name;
 }
 
 function renderSummary() {
@@ -103,9 +115,9 @@ function renderSummary() {
   ];
   els.summary.innerHTML = `
     <div class="path-summary-copy">
-      <span class="label">${escapeHtml(team.name)} · ${escapeHtml(team.elo)} Elo</span>
-      <h2>${percent(team.finalProb)} to reach the final</h2>
-      <p>${likelyPathSentence(team)}</p>
+      <span class="label">Selected team</span>
+      <strong>${escapeHtml(team.name)}</strong>
+      <small>${escapeHtml(team.elo)} Elo · ${percent(team.finalProb)} final</small>
     </div>
     <div class="path-prob-strip">
       ${stages.map(([label, value]) => `<div><span>${label}</span><strong>${percent(value)}</strong></div>`).join('')}
@@ -186,8 +198,9 @@ function slotCard(slot, index) {
       </header>
       <div class="slot-contenders">
         ${visible.map(team => `
-          <button class="bracket-team ${team.code === state.selectedTeam ? 'selected' : ''}" type="button"
-            data-team-code="${escapeHtml(team.code)}" aria-pressed="${team.code === state.selectedTeam}">
+          <button class="bracket-team ${state.lockedTeams.has(team.code) ? 'has-locked-slot' : ''} ${team.code === state.selectedTeam ? 'selected' : ''}" type="button"
+            data-team-code="${escapeHtml(team.code)}" aria-pressed="${team.code === state.selectedTeam}"
+            ${state.lockedTeams.has(team.code) ? 'title="Starting bracket slot confirmed"' : ''}>
             <span>${escapeHtml(team.name)}</span>
             ${confirmed ? '<strong>IN</strong>' : `<strong>${percent(team.probability)}</strong>`}
           </button>`).join('')}

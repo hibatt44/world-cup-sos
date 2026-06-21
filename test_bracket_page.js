@@ -59,7 +59,7 @@ function forecast(match, nextMatch, selectedProbability, opponentName) {
         slots: [
             {
                 source: match <= 2 ? '1A' : match - 1,
-                contenders: [{ code: 'XX', name: selected.name, probability: selectedProbability }]
+                contenders: [{ code: 'XX', name: selected.name, probability: match === 2 ? 1 : selectedProbability }]
             },
             {
                 source: match <= 2 ? '2B' : match - 2,
@@ -100,10 +100,13 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.ok(!elements.bracketBoard.innerHTML.includes('<img'));
     assert.ok(!elements.bracketTeamOptions.innerHTML.includes('<img'));
     assert.match(elements.bracketTeamOptions.innerHTML, /United States|&lt;img/);
+    assert.equal(elements.bracketTeamSearch.value, selected.name);
     assert.match(elements.bracketBoard.innerHTML, /data-team-code="XX"/);
+    assert.match(elements.bracketBoard.innerHTML, /has-locked-slot selected/);
+    assert.match(elements.bracketBoard.innerHTML, /Starting bracket slot confirmed/);
     assert.match(elements.bracketBoard.innerHTML, /aria-pressed="true"/);
-    assert.match(elements.pathSummary.innerHTML, /Round of 16: Correct opponent/);
-    assert.doesNotMatch(elements.pathSummary.innerHTML, /Round of 16: Wrong opponent/);
+    assert.match(elements.pathSummary.innerHTML, /Selected team/);
+    assert.match(elements.pathSummary.innerHTML, /1500 Elo/);
 
     const pathMatches = [...elements.bracketBoard.innerHTML.matchAll(/bracket-match on-path[^>]*>[\s\S]*?Bracket (\d+)/g)]
         .map(match => Number(match[1]));
