@@ -3,6 +3,7 @@ const path = require('path');
 const sosCalculator = require('./lib/sosCalculator');
 const bracketSimulator = require('./lib/bracketSimulator');
 const worldCupGroups = require('./data/worldCupGroups.json');
+const worldCupSchedule = require('./data/worldCupSchedule.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -348,8 +349,11 @@ app.get('/api/sos', async (req, res) => {
         res.json({
             ...sosData,
             worldCupGroups,
+            worldCupSchedule,
             playoffSimulation: playoffSim,
-            groupSimulation: monteCarloCache.data,  // Add pre-computed simulation
+            groupSimulation: monteCarloCache.data.groupSimulation,
+            bracketForecast: monteCarloCache.data.bracketForecast,
+            simulationCount: monteCarloCache.data.simulations,
             groupRecords,
             completedGroupMatches,
             cacheAge: Date.now() - cache.rankings.timestamp,
@@ -365,7 +369,7 @@ app.get('/api/sos', async (req, res) => {
 });
 
 app.get('/api/groups', (req, res) => {
-    res.json(worldCupGroups);
+    res.json({ ...worldCupGroups, schedule: worldCupSchedule });
 });
 
 // Start server

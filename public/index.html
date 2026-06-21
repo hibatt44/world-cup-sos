@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="print">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>World Cup 2026 SoS Room</title>
-  <meta name="description" content="A live World Cup 2026 strength-of-schedule dashboard powered by Elo ratings.">
+  <title>World Cup 2026 Forecast</title>
+  <meta name="description" content="Live World Cup 2026 group finish and qualification probabilities powered by Elo simulations.">
   <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -13,10 +13,13 @@
   <main class="shell">
     <header class="hero" id="top">
       <nav class="topbar" aria-label="Primary">
-        <a class="brand" href="#top">World Cup SoS Room</a>
+        <a class="brand" href="index.html">World Cup Forecast</a>
         <div class="nav-links">
+          <a href="index.html" aria-current="page">Group forecast</a>
+          <a href="bracket.html">Bracket paths</a>
           <a href="methodology.html">Methodology</a>
         </div>
+        <div class="theme-switcher" aria-label="Choose visual design"></div>
         <div class="status-pill" id="statusPill">Loading live Elo</div>
       </nav>
     </header>
@@ -24,24 +27,31 @@
     <section class="section lead-board" id="groupBoard" aria-labelledby="groupBoardTitle">
       <div class="section-heading split">
         <div>
-          <h1 id="groupBoardTitle">Group Difficulty Board</h1>
-          <p class="section-note">Compare every World Cup group by average Elo, then see each team's chance to advance from that group.</p>
+          <p class="eyebrow">50,000 Elo simulations</p>
+          <h1 id="groupBoardTitle">How every group could finish</h1>
+          <p class="section-note">First, second and third-place probabilities sit alongside each team’s overall chance to qualify for the round of 32.</p>
         </div>
-        <a class="button" href="#groups">Inspect paths</a>
+        <div class="board-actions">
+          <label class="date-control">
+            Viewing date
+            <input type="date" id="scheduleDate" min="2026-06-11" max="2026-06-27">
+          </label>
+          <button class="button" id="todayButton" type="button">Today</button>
+          <a class="button primary" href="bracket.html">Explore bracket paths</a>
+        </div>
       </div>
       <div class="group-board" id="groupBoardGrid" aria-live="polite"></div>
     </section>
 
     <section class="hero-grid section" aria-labelledby="pathInspectorTitle">
         <div class="hero-copy">
-          <p class="eyebrow">Strength of schedule</p>
-          <h2 id="pathInspectorTitle">Path inspector</h2>
-          <p class="lede">Rest-of-group SoS measures the average Elo of a team’s three group opponents. It answers the
-            question for every team without letting a strong or weak team soften its own group rating.</p>
+          <p class="eyebrow">Team forecast</p>
+          <h2 id="pathInspectorTitle">Pick a team. See the shape of its tournament.</h2>
+          <p class="lede">The model incorporates completed group results, simulates the remaining matches, ranks the best third-place teams, then plays the knockout bracket with current Elo ratings.</p>
           <div class="team-spotlight" id="teamSpotlight" aria-live="polite"></div>
           <div class="hero-actions">
-            <a class="button primary" href="#groupBoard">Compare groups</a>
-            <a class="button" href="#groups">Inspect paths</a>
+            <a class="button primary" href="#groups">Inspect a group</a>
+            <a class="button" href="bracket.html">Open bracket</a>
           </div>
         </div>
 
@@ -60,8 +70,8 @@
               <strong id="teamCount">48</strong>
             </div>
             <div>
-              <span class="label">Primary SoS</span>
-              <strong>ROG</strong>
+              <span class="label">Simulations</span>
+              <strong>50k</strong>
             </div>
           </div>
           <p id="lastUpdated">Waiting for live data...</p>
@@ -79,8 +89,8 @@
     <section class="section" id="groups" aria-labelledby="groupsTitle">
       <div class="section-heading split">
         <div>
-          <p class="eyebrow">Group difficulty</p>
-          <h2 id="groupsTitle">Rest-of-group SoS</h2>
+          <p class="eyebrow">Group outcomes</p>
+          <h2 id="groupsTitle">Finish and qualification probabilities</h2>
         </div>
         <select id="groupSelect" aria-label="Choose a group"></select>
       </div>
@@ -127,6 +137,7 @@
     </section>
   </main>
 
+  <script src="theme.js"></script>
   <script src="app.js"></script>
 </body>
 

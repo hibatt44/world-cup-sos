@@ -4,7 +4,8 @@ const state = {
   results: [],
   teams: [],
   selectedGroup: 'D',
-  selectedTeam: null
+  selectedTeam: null,
+  selectedDate: localDateKey(new Date())
 };
 
 const worldCupStart = new Date('2026-06-11T19:00:00-05:00');
@@ -18,6 +19,8 @@ const els = {
   teamCount: document.querySelector('#teamCount'),
   lastUpdated: document.querySelector('#lastUpdated'),
   groupBoardGrid: document.querySelector('#groupBoardGrid'),
+  scheduleDate: document.querySelector('#scheduleDate'),
+  todayButton: document.querySelector('#todayButton'),
   contenderGrid: document.querySelector('#contenderGrid'),
   groupSelect: document.querySelector('#groupSelect'),
   groupDetail: document.querySelector('#groupDetail'),
@@ -43,11 +46,15 @@ async function init() {
     ]);
 
     state.sos = sos;
+    if (sos.worldCupSchedule) {
+      state.selectedDate = clampDate(state.selectedDate, sos.worldCupSchedule.groupStageStart, sos.worldCupSchedule.groupStageEnd);
+    }
     state.rankings = rankings.rankings || [];
     state.results = results.results || [];
     state.teams = buildTeamList(sos, state.rankings);
-    state.selectedTeam = state.sos.teams[0]?.code || 'US';
-    state.selectedGroup = state.sos.teams[0]?.group || 'D';
+    const firstScheduledGroup = orderedGroups(Object.keys(state.sos.worldCupGroups.groups))[0];
+    state.selectedGroup = firstScheduledGroup || 'D';
+    state.selectedTeam = (state.sos.groupSimulation[state.selectedGroup] || [])[0]?.code || 'US';
 
     renderAll();
     els.statusPill.textContent = 'Live Elo loaded';
@@ -72,6 +79,7 @@ function renderAll() {
   els.lastUpdated.textContent = `Updated ${formatDateTime(state.sos.lastUpdated)}`;
 
   renderGroupBoard();
+  renderScheduleControls();
   renderContenders();
   renderTeamSpotlight();
   renderGroupSelect(groupNames);
@@ -85,35 +93,32 @@ function renderTeamSpotlight() {
   const path = getSosTeam(state.selectedTeam) || state.sos.teams[0];
   const team = getTeam(path?.code);
   const groupTeams = state.sos.worldCupGroups.groups[path?.group]?.teams || [];
-  const opponents = groupTeams
-    .filter(code => code !== path.code)
-    .map(code => getTeam(code) || { code, name: code, elo: 0 });
-  const groupRank = state.sos.groups.find(group => group.group === path?.group);
   const simulation = (state.sos.groupSimulation[path?.group] || []).find(candidate => candidate.code === path.code);
 
-  if (!path || !team || !opponents.length) {
+  if (!path || !team || !simulation) {
     els.teamSpotlight.innerHTML = '<p class="empty">Path data is still loading.</p>';
     return;
   }
 
   els.teamSpotlight.innerHTML = `
     <div class="spotlight-metric">
-      <span class="label">Rest-of-group SoS</span>
-      <strong>${path.groupOpponentSoS}</strong>
-      <p>#${path.sosRank} hardest path by opponent Elo</p>
+      <span class="label">Qualify for R32</span>
+      <strong>${percent(simulation.r32Prob)}</strong>
+      <p>${percent(simulation.winProb)} chance to win the World Cup</p>
     </div>
     <div class="spotlight-copy">
       <label class="spotlight-selector">
         Inspect team
         <select id="spotlightTeamSelect" aria-label="Inspect team path">
-          ${state.sos.teams.map(teamOption).join('')}
+          ${Object.values(state.sos.groupSimulation).flat().sort((a, b) => a.name.localeCompare(b.name)).map(teamOption).join('')}
         </select>
       </label>
-      <p><strong>${team.name}</strong> is in Group ${path.group}. The group ranks #${groupRank?.rank || '--'} by average Elo, but the sharper team lens is the opponent-only number:
-        ${opponents.map(team => `${team.name} (${team.elo})`).join(', ')}.</p>
+      <p><strong>${team.name}</strong> is in Group ${path.group}. Its most likely group outcome is ${mostLikelyFinish(simulation)}, based on current Elo and completed results.</p>
       <div class="mini-stats">
-        <span>${percent(simulation?.r32Prob)} reach R32</span>
-        <span>${percent(simulation?.r16Prob)} reach R16</span>
+        <span>${percent(simulation.pos1Prob)} first</span>
+        <span>${percent(simulation.pos2Prob)} second</span>
+        <span>${percent(simulation.pos3Prob)} third</span>
+        <span>${percent(simulation.r16Prob)} reach R16</span>
       </div>
     </div>
   `;
@@ -123,74 +128,112 @@ function renderTeamSpotlight() {
   });
 }
 
-function teamOption(path) {
-  const team = getTeam(path.code);
-  const selected = path.code === state.selectedTeam ? 'selected' : '';
-  return `<option value="${path.code}" ${selected}>#${path.sosRank} ${team?.name || path.code} (${path.groupOpponentSoS})</option>`;
+function teamOption(team) {
+  const selected = team.code === state.selectedTeam ? 'selected' : '';
+  return `<option value="${team.code}" ${selected}>${team.name} · Group ${getSosTeam(team.code)?.group || '?'}</option>`;
 }
 
 function renderGroupBoard() {
-  els.groupBoardGrid.innerHTML = state.sos.groups.map(groupCard).join('');
+  const groupByName = new Map(state.sos.groups.map(group => [group.group, group]));
+  els.groupBoardGrid.innerHTML = orderedGroups([...groupByName.keys()])
+    .map(group => groupCard(groupByName.get(group)))
+    .join('');
 }
 
 function groupCard(group) {
-  const teams = groupTeamsBySos(group.group);
-  const hardest = teams[0];
-  const easiest = teams[teams.length - 1];
   const advancementOrder = [...(state.sos.groupSimulation[group.group] || [])]
     .sort((a, b) => b.r32Prob - a.r32Prob);
-  const averageOpponentSos = Math.round(
-    teams.reduce((sum, team) => sum + team.groupOpponentSoS, 0) / Math.max(teams.length, 1)
-  );
+  const timingClass = groupTimingClass(group.group);
 
   return `
-    <article class="group-board-card ${group.group === state.selectedGroup ? 'active' : ''}">
+    <article class="group-board-card ${timingClass}">
       <button type="button" onclick="selectGroup('${group.group}')" aria-label="Inspect Group ${group.group}">
         <div class="group-board-head">
-          <span class="label">#${group.rank} group difficulty</span>
+          <span class="label">${scheduleLabel(group.group)}</span>
           <strong>Group ${group.group}</strong>
         </div>
-        <div class="group-board-metric">
-          <span>${group.strength}</span>
-          <em>avg Elo</em>
-        </div>
         <div class="group-advance-header" aria-hidden="true">
+          <span></span>
           <span>Team</span>
-          <span>Advance</span>
+          <span>1st</span>
+          <span>2nd</span>
+          <span>3rd</span>
+          <span>Qual.</span>
         </div>
         <ol class="group-advance-list" aria-label="Group ${group.group} teams by advancement probability">
           ${advancementOrder.map(advanceRow).join('')}
         </ol>
-        <dl>
-          <div>
-            <dt>Avg opponent Elo</dt>
-            <dd>${averageOpponentSos}</dd>
-          </div>
-          <div>
-            <dt>Hardest schedule</dt>
-            <dd>${teamName(hardest?.code)} ${hardest?.groupOpponentSoS || '--'}</dd>
-          </div>
-          <div>
-            <dt>Easiest schedule</dt>
-            <dd>${teamName(easiest?.code)} ${easiest?.groupOpponentSoS || '--'}</dd>
-          </div>
-        </dl>
       </button>
     </article>
   `;
 }
 
+function renderScheduleControls() {
+  const schedule = state.sos.worldCupSchedule;
+  if (!schedule || !els.scheduleDate) return;
+  els.scheduleDate.min = schedule.groupStageStart;
+  els.scheduleDate.max = schedule.groupStageEnd;
+  els.scheduleDate.value = state.selectedDate;
+  els.scheduleDate.addEventListener('change', event => {
+    state.selectedDate = event.target.value;
+    const firstGroup = orderedGroups(Object.keys(state.sos.worldCupGroups.groups))[0];
+    if (firstGroup) state.selectedGroup = firstGroup;
+    renderGroupBoard();
+    els.groupSelect.value = state.selectedGroup;
+    renderGroup();
+  });
+  els.todayButton.addEventListener('click', () => {
+    const today = localDateKey(new Date());
+    state.selectedDate = clampDate(today, schedule.groupStageStart, schedule.groupStageEnd);
+    els.scheduleDate.value = state.selectedDate;
+    const firstGroup = orderedGroups(Object.keys(state.sos.worldCupGroups.groups))[0];
+    if (firstGroup) state.selectedGroup = firstGroup;
+    renderGroupBoard();
+    els.groupSelect.value = state.selectedGroup;
+    renderGroup();
+  });
+}
+
+function orderedGroups(groups) {
+  const schedule = state.sos?.worldCupSchedule?.groups || {};
+  return [...groups].sort((a, b) => {
+    const aDate = nextGroupDate(a, schedule);
+    const bDate = nextGroupDate(b, schedule);
+    if (aDate !== bDate) return aDate.localeCompare(bDate);
+    return a.localeCompare(b);
+  });
+}
+
+function nextGroupDate(group, schedule = state.sos?.worldCupSchedule?.groups || {}) {
+  const dates = schedule[group] || [];
+  return dates.find(date => date >= state.selectedDate) || '9999-12-31';
+}
+
+function scheduleLabel(group) {
+  const date = nextGroupDate(group);
+  if (date === '9999-12-31') return 'Group stage complete';
+  if (date === state.selectedDate) return 'Playing today';
+  if (date === shiftDate(state.selectedDate, 1)) return 'Playing tomorrow';
+  return `Next match ${formatScheduleDate(date)}`;
+}
+
+function groupTimingClass(group) {
+  const date = nextGroupDate(group);
+  if (date === state.selectedDate) return 'playing-today';
+  if (date === shiftDate(state.selectedDate, 1)) return 'playing-tomorrow';
+  return '';
+}
+
 function advanceRow(team, index) {
-  const sosTeam = getSosTeam(team.code);
   const record = getGroupRecord(team.code);
   return `
     <li>
       <span class="advance-rank">${index + 1}</span>
       <span class="advance-team">
         <strong>${team.name}</strong>
-        <em>${recordLine(record)} · ${sosTeam?.groupOpponentSoS || '--'} SoS</em>
+        <em>${recordLine(record)}</em>
       </span>
-      <span class="advance-prob">${percent(team.r32Prob)}</span>
+      <span class="advance-prob finish-probs"><em>${percent(team.pos1Prob)}</em><em>${percent(team.pos2Prob)}</em><em>${percent(team.pos3Prob)}</em><strong>${percent(team.r32Prob)}</strong></span>
     </li>
   `;
 }
@@ -236,24 +279,12 @@ function renderGroup() {
     .map(record => simulationByCode.get(record.code))
     .filter(Boolean);
   const displayedTeams = standingsOrder.length ? standingsOrder : simulation;
-  const groupStrength = state.sos.groups.find(item => item.group === group);
-  const sosTeams = groupTeamsBySos(group);
-  const hardest = sosTeams[0];
-  const easiest = sosTeams[sosTeams.length - 1];
-  const averageOpponentSos = Math.round(
-    sosTeams.reduce((sum, team) => sum + team.groupOpponentSoS, 0) / Math.max(sosTeams.length, 1)
-  );
 
   els.groupDetail.innerHTML = `
     <div class="group-hero">
       <span class="label">Group ${group}</span>
-      <h3>#${groupStrength?.rank || '--'} group difficulty · ${groupStrength?.strength || '--'} average Elo</h3>
-      <p>${groupInfo.notes || 'All four places are currently known.'}</p>
-      <div class="group-sos-strip">
-        <span><strong>${averageOpponentSos}</strong> avg opponent Elo</span>
-        <span><strong>${teamName(hardest?.code)}</strong> hardest schedule at ${hardest?.groupOpponentSoS || '--'}</span>
-        <span><strong>${teamName(easiest?.code)}</strong> easiest schedule at ${easiest?.groupOpponentSoS || '--'}</span>
-      </div>
+      <h3>Current table meets 50,000 simulated finishes</h3>
+      <p>${groupInfo.notes || 'Top two qualify automatically; eight of the twelve third-place teams also advance.'}</p>
     </div>
     <div class="team-list">
       ${displayedTeams.map(teamCard).join('')}
@@ -261,16 +292,15 @@ function renderGroup() {
   `;
 
   els.groupRankings.innerHTML = `
-    <h3>Every team's rest-of-group SoS</h3>
-    <p class="panel-note">Higher means a harder trio of group opponents. The active group is highlighted.</p>
+    <h3>Qualification leaderboard</h3>
+    <p class="panel-note">Every team ranked by its simulated chance to reach the round of 32.</p>
     <ol class="heat-list">
-      ${state.sos.teams.map(sosRow).join('')}
+      ${Object.values(state.sos.groupSimulation).flat().sort((a, b) => b.r32Prob - a.r32Prob).map(qualificationRow).join('')}
     </ol>
   `;
 }
 
 function teamCard(team) {
-  const sosTeam = getSosTeam(team.code);
   const record = getGroupRecord(team.code);
   return `
     <article class="team-card">
@@ -280,22 +310,22 @@ function teamCard(team) {
       </div>
       <div class="team-probs">
         <span>${recordLine(record)}</span>
-        <span>${sosTeam?.groupOpponentSoS || '--'} ROG SoS</span>
-        <span>${percent(team.r32Prob)} R32</span>
+        <span>${percent(team.pos1Prob)} 1st · ${percent(team.pos2Prob)} 2nd · ${percent(team.pos3Prob)} 3rd</span>
+        <span><strong>${percent(team.r32Prob)} qualify</strong></span>
         <span>${percent(team.winProb)} title</span>
       </div>
     </article>
   `;
 }
 
-function sosRow(item) {
+function qualificationRow(item) {
   const active = item.code === state.selectedTeam ? 'active selected-team' : item.group === state.selectedGroup ? 'active' : '';
-  const team = getTeam(item.code);
+  const group = getSosTeam(item.code)?.group || '?';
   return `
     <li class="${active}">
       <button type="button" onclick="selectTeam('${item.code}')">
-        <span>${team?.name || item.code} <em>Group ${item.group}</em></span>
-        <strong>${item.groupOpponentSoS}</strong>
+        <span>${item.name} <em>Group ${group}</em></span>
+        <strong>${percent(item.r32Prob)}</strong>
       </button>
     </li>
   `;
@@ -386,7 +416,7 @@ function renderMatchResult() {
 }
 
 function renderResults() {
-  els.resultsStrip.innerHTML = state.results.slice(0, 8).map(result => `
+  els.resultsStrip.innerHTML = state.results.slice(0, 16).map(result => `
     <article class="result-card">
       <span>${result.date} · ${result.tournament}</span>
       <strong>${result.team1Name} ${result.score1}-${result.score2} ${result.team2Name}</strong>
@@ -512,4 +542,34 @@ function formatDateTime(value) {
     hour: 'numeric',
     minute: '2-digit'
   });
+}
+
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shiftDate(dateKey, days) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return localDateKey(date);
+}
+
+function formatScheduleDate(dateKey) {
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function clampDate(value, min, max) {
+  return value < min ? min : value > max ? max : value;
+}
+
+function mostLikelyFinish(team) {
+  const finishes = [team.pos1Prob, team.pos2Prob, team.pos3Prob, team.pos4Prob];
+  const labels = ['first place', 'second place', 'third place', 'fourth place'];
+  return labels[finishes.indexOf(Math.max(...finishes))];
 }
