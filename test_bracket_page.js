@@ -128,12 +128,14 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.match(elements.pathSummary.innerHTML, /Selected team/);
     assert.match(elements.pathSummary.innerHTML, /1500 Elo/);
 
-    const pathMatches = [...elements.bracketBoard.innerHTML.matchAll(/bracket-match on-path[^>]*>[\s\S]*?Bracket (\d+)/g)]
+    const pathMatches = [...elements.bracketBoard.innerHTML.matchAll(/bracket-match on-path[^>]*data-match="(\d+)"/g)]
         .map(match => Number(match[1]));
     assert.deepEqual(pathMatches, [2, 11, 21, 30, 40]);
     assert.match(elements.bracketBoard.innerHTML, /Wed, Jul 1/);
     assert.match(elements.bracketBoard.innerHTML, /Venue 2/);
-    assert.match(elements.bracketBoard.innerHTML, /Slot 1 · Group A winner/);
+    assert.match(elements.bracketBoard.innerHTML, /Group A winner/);
+    assert.match(elements.bracketBoard.innerHTML, /Winner of FIFA match/);
+    assert.doesNotMatch(elements.bracketBoard.innerHTML, /Slot 1|Bracket 2|Projected/);
 
     elements.showAllButton.handlers.change({ target: { checked: false } });
     assert.ok(!elements.bracketBoard.classList.contains('is-focused'));

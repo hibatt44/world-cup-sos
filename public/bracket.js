@@ -245,17 +245,17 @@ function matchCard(match, pathMatchNumber, index, matchCount) {
           ${schedule?.date
             ? `<time datetime="${escapeHtml(schedule.date)}">${formatDate(schedule.date)}</time>`
             : `<span>Match date TBD</span>`}
-          <small>Bracket ${escapeHtml(match.match)}${schedule?.officialMatch ? ` · FIFA ${escapeHtml(schedule.officialMatch)}` : ''}</small>
+          <small>${schedule?.officialMatch ? `FIFA match ${escapeHtml(schedule.officialMatch)}` : `Match ${escapeHtml(match.match)}`}</small>
         </div>
         <strong>${escapeHtml(schedule?.venue || 'Venue TBD')}</strong>
       </header>
       <div class="match-slots">
-        ${(match.slots || []).map((slot, index) => slotCard(slot, index)).join('')}
+        ${(match.slots || []).map(slot => slotCard(slot)).join('')}
       </div>
     </article>`;
 }
 
-function slotCard(slot, index) {
+function slotCard(slot) {
   const confirmed = slot.contenders.length === 1 && slot.contenders[0].probability >= 0.999;
   const selected = slot.contenders.find(team => team.code === state.selectedTeam);
   const visible = slot.contenders.slice(0, selected && !slot.contenders.slice(0, 3).some(team => team.code === selected.code) ? 2 : 3);
@@ -263,8 +263,8 @@ function slotCard(slot, index) {
   return `
     <section class="bracket-slot ${confirmed ? 'is-confirmed' : ''}">
       <header>
-        <span>Slot ${index + 1} · ${escapeHtml(slotSourceLabel(slot.source))}</span>
-        <small>${confirmed ? 'Qualified' : 'Projected'}</small>
+        <span>${escapeHtml(slotSourceLabel(slot.source))}</span>
+        ${confirmed ? '<small>Qualified</small>' : ''}
       </header>
       <div class="slot-contenders">
         ${visible.map(team => `
