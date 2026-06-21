@@ -23,6 +23,8 @@ const bracketDisplayOrder = {
 
 const els = {
   status: document.querySelector('#statusPill'),
+  search: document.querySelector('#bracketTeamSearch'),
+  searchOptions: document.querySelector('#bracketTeamOptions'),
   summary: document.querySelector('#pathSummary'),
   board: document.querySelector('#bracketBoard'),
   focus: document.querySelector('#showAllButton')
@@ -57,10 +59,21 @@ function assertCompatibleForecast(data) {
 }
 
 function setupInteractions() {
-  els.focus.addEventListener('click', () => {
-    state.focused = !state.focused;
-    els.focus.textContent = state.focused ? 'Show full bracket' : 'Focus selected path';
-    els.focus.setAttribute('aria-pressed', String(state.focused));
+  els.searchOptions.innerHTML = state.teams.map(team =>
+    `<option value="${escapeHtml(team.name)}">${escapeHtml(team.code)}</option>`
+  ).join('');
+  els.search.addEventListener('input', event => {
+    const query = event.target.value.trim().toLocaleLowerCase();
+    const team = state.teams.find(candidate =>
+      candidate.name.toLocaleLowerCase() === query || candidate.code.toLocaleLowerCase() === query
+    );
+    if (!team) return;
+    state.selectedTeam = team.code;
+    event.target.value = '';
+    render();
+  });
+  els.focus.addEventListener('change', event => {
+    state.focused = event.target.checked;
     renderBracket();
   });
   els.board.addEventListener('click', event => {

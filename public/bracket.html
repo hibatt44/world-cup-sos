@@ -22,28 +22,31 @@
       </nav>
     </header>
 
-    <section class="section bracket-intro">
-      <div class="section-heading">
-        <p class="eyebrow">Knockout route finder</p>
-        <h1>Likely paths to the final</h1>
-        <p class="section-note">Each match has two bracket slots. Confirmed qualifiers are pinned in place; unresolved slots show the teams most likely to fill them across the same Elo simulations used by the group forecast.</p>
+    <section class="bracket-toolbar" aria-labelledby="bracketTitle">
+      <div>
+        <p class="eyebrow">World Cup 2026 knockout bracket</p>
+        <h1 id="bracketTitle">Bracket paths</h1>
       </div>
-      <div class="bracket-interaction-note">
-        <span>Explore the bracket</span>
+      <div class="bracket-toolbar-copy">
         <strong>Click any team to trace its route.</strong>
+        <span>Two slots per match · probabilities show the chance of occupying that slot.</span>
       </div>
+      <label class="bracket-team-search">
+        <span>Find team</span>
+        <input id="bracketTeamSearch" type="search" list="bracketTeamOptions" placeholder="Search teams…" autocomplete="off">
+        <datalist id="bracketTeamOptions"></datalist>
+      </label>
+      <label class="bracket-focus-toggle">
+        <input id="showAllButton" type="checkbox" role="switch">
+        <span class="toggle-option toggle-full">Full bracket</span>
+        <span class="toggle-track" aria-hidden="true"><span></span></span>
+        <span class="toggle-option toggle-focus">Focus path</span>
+      </label>
     </section>
 
     <section class="path-summary" id="pathSummary" aria-live="polite"></section>
 
-    <section class="section" aria-labelledby="bracketTitle">
-      <div class="section-heading split">
-        <div>
-          <p class="eyebrow">Projected bracket</p>
-          <h2 id="bracketTitle">From round of 32 to final</h2>
-        </div>
-        <button class="button" id="showAllButton" type="button" aria-pressed="false">Focus selected path</button>
-      </div>
+    <section class="section bracket-stage" aria-label="Projected bracket from round of 32 to final">
       <div class="bracket-scroll">
         <div class="bracket-board" id="bracketBoard"></div>
       </div>

@@ -24,6 +24,8 @@ function element() {
 
 const elements = {
     statusPill: element(),
+    bracketTeamSearch: element(),
+    bracketTeamOptions: element(),
     pathSummary: element(),
     bracketBoard: element(),
     showAllButton: element()
@@ -96,6 +98,8 @@ global.fetch = async () => ({ ok: true, json: async () => data });
 
     assert.ok(!elements.pathSummary.innerHTML.includes('<img'));
     assert.ok(!elements.bracketBoard.innerHTML.includes('<img'));
+    assert.ok(!elements.bracketTeamOptions.innerHTML.includes('<img'));
+    assert.match(elements.bracketTeamOptions.innerHTML, /United States|&lt;img/);
     assert.match(elements.bracketBoard.innerHTML, /data-team-code="XX"/);
     assert.match(elements.bracketBoard.innerHTML, /aria-pressed="true"/);
     assert.match(elements.pathSummary.innerHTML, /Round of 16: Correct opponent/);
@@ -108,8 +112,7 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.match(elements.bracketBoard.innerHTML, /Venue 2/);
     assert.match(elements.bracketBoard.innerHTML, /Slot 1 · Group A winner/);
 
-    elements.showAllButton.handlers.click();
-    assert.equal(elements.showAllButton.attributes['aria-pressed'], 'true');
+    elements.showAllButton.handlers.change({ target: { checked: true } });
     assert.ok(elements.bracketBoard.classList.contains('is-focused'));
 
     console.log('Bracket page tests passed');
