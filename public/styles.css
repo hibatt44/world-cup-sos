@@ -1127,6 +1127,29 @@ select {
   padding: 10px;
 }
 
+.path-summary.is-empty {
+  grid-template-columns: 1fr;
+  min-height: 66px;
+}
+
+.path-summary-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.path-summary-prompt strong {
+  color: var(--ink);
+}
+
+.bracket-focus-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .path-summary-copy {
   display: flex;
   flex-direction: column;

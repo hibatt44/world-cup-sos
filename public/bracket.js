@@ -41,7 +41,8 @@ async function init() {
     state.teams = Object.values(state.data.groupSimulation || {}).flat()
       .sort((a, b) => a.name.localeCompare(b.name));
     state.lockedTeams = lockedStartingTeams(state.data.bracketForecast?.r32 || []);
-    state.selectedTeam = state.teams.some(team => team.code === 'US') ? 'US' : state.teams[0]?.code;
+    state.selectedTeam = state.teams.some(team => team.code === 'US') ? 'US' : state.teams[0]?.code || null;
+    state.focused = Boolean(state.selectedTeam);
     setupInteractions();
     render();
     els.status.textContent = `${Number(state.data.simulationCount || 50000).toLocaleString()} simulations loaded`;
@@ -67,6 +68,13 @@ function assertCompatibleForecast(data) {
 
 function setupInteractions() {
   els.search.addEventListener('input', event => {
+    if (!event.target.value.trim()) {
+      state.selectedTeam = null;
+      state.focused = false;
+      render();
+      closeSearchResults();
+      return;
+    }
     renderSearchResults(event.target.value);
   });
   els.search.addEventListener('focus', event => {
@@ -108,6 +116,7 @@ function setupInteractions() {
 
 function selectTeam(code) {
   state.selectedTeam = code;
+  state.focused = true;
   render();
 }
 
@@ -139,18 +148,33 @@ function closeSearchResults() {
 
 function render() {
   syncSelectedTeamControl();
+  syncViewToggle();
   renderSummary();
   renderBracket();
 }
 
 function syncSelectedTeamControl() {
   const team = state.teams.find(candidate => candidate.code === state.selectedTeam);
-  if (team && els.search) els.search.value = team.name;
+  if (els.search) els.search.value = team?.name || '';
+}
+
+function syncViewToggle() {
+  const hasSelection = Boolean(state.selectedTeam);
+  els.focus.disabled = !hasSelection;
+  els.focus.checked = hasSelection && state.focused;
 }
 
 function renderSummary() {
   const team = state.teams.find(candidate => candidate.code === state.selectedTeam);
-  if (!team) return;
+  els.summary.classList.toggle('is-empty', !team);
+  if (!team) {
+    els.summary.innerHTML = `
+      <div class="path-summary-prompt">
+        <strong>Choose a team to trace its route</strong>
+        <span>Click a team in the bracket or use the country search above.</span>
+      </div>`;
+    return;
+  }
   const stages = [
     ['Qualify', team.r32Prob],
     ['Reach R16', team.r16Prob],

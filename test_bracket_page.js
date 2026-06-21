@@ -99,6 +99,22 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.ok(!elements.pathSummary.innerHTML.includes('<img'));
     assert.ok(!elements.bracketBoard.innerHTML.includes('<img'));
     assert.equal(elements.bracketTeamSearch.value, selected.name);
+    assert.match(elements.pathSummary.innerHTML, /Selected team/);
+    assert.ok(elements.bracketBoard.classList.contains('is-focused'));
+    assert.equal(elements.showAllButton.disabled, false);
+
+    elements.bracketTeamSearch.handlers.input({ target: { value: '' } });
+    assert.equal(elements.bracketTeamSearch.value, '');
+    assert.match(elements.pathSummary.innerHTML, /Choose a team to trace its route/);
+    assert.ok(!elements.bracketBoard.classList.contains('is-focused'));
+    assert.equal(elements.showAllButton.disabled, true);
+    assert.equal(elements.bracketTeamResults.hidden, true);
+    assert.equal(elements.bracketTeamSearch.attributes['aria-expanded'], 'false');
+
+    elements.bracketBoard.handlers.click({
+        target: { closest: () => ({ dataset: { teamCode: 'XX' } }) }
+    });
+    assert.equal(elements.bracketTeamSearch.value, selected.name);
     elements.bracketTeamSearch.handlers.focus({ target: elements.bracketTeamSearch });
     assert.ok(!elements.bracketTeamResults.innerHTML.includes('<img'));
     assert.match(elements.bracketTeamResults.innerHTML, /&lt;img/);
@@ -107,6 +123,7 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.match(elements.bracketBoard.innerHTML, /has-locked-slot selected/);
     assert.match(elements.bracketBoard.innerHTML, /Starting bracket slot confirmed/);
     assert.ok(elements.bracketBoard.classList.contains('is-focused'));
+    assert.equal(elements.showAllButton.disabled, false);
     assert.match(elements.bracketBoard.innerHTML, /aria-pressed="true"/);
     assert.match(elements.pathSummary.innerHTML, /Selected team/);
     assert.match(elements.pathSummary.innerHTML, /1500 Elo/);
