@@ -25,7 +25,7 @@ function element() {
 const elements = {
     statusPill: element(),
     bracketTeamSearch: element(),
-    bracketTeamOptions: element(),
+    bracketTeamResults: element(),
     pathSummary: element(),
     bracketBoard: element(),
     showAllButton: element()
@@ -98,12 +98,15 @@ global.fetch = async () => ({ ok: true, json: async () => data });
 
     assert.ok(!elements.pathSummary.innerHTML.includes('<img'));
     assert.ok(!elements.bracketBoard.innerHTML.includes('<img'));
-    assert.ok(!elements.bracketTeamOptions.innerHTML.includes('<img'));
-    assert.match(elements.bracketTeamOptions.innerHTML, /United States|&lt;img/);
     assert.equal(elements.bracketTeamSearch.value, selected.name);
+    elements.bracketTeamSearch.handlers.focus({ target: elements.bracketTeamSearch });
+    assert.ok(!elements.bracketTeamResults.innerHTML.includes('<img'));
+    assert.match(elements.bracketTeamResults.innerHTML, /&lt;img/);
+    assert.equal(elements.bracketTeamSearch.attributes['aria-expanded'], 'true');
     assert.match(elements.bracketBoard.innerHTML, /data-team-code="XX"/);
     assert.match(elements.bracketBoard.innerHTML, /has-locked-slot selected/);
     assert.match(elements.bracketBoard.innerHTML, /Starting bracket slot confirmed/);
+    assert.ok(elements.bracketBoard.classList.contains('is-focused'));
     assert.match(elements.bracketBoard.innerHTML, /aria-pressed="true"/);
     assert.match(elements.pathSummary.innerHTML, /Selected team/);
     assert.match(elements.pathSummary.innerHTML, /1500 Elo/);
@@ -115,8 +118,8 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.match(elements.bracketBoard.innerHTML, /Venue 2/);
     assert.match(elements.bracketBoard.innerHTML, /Slot 1 · Group A winner/);
 
-    elements.showAllButton.handlers.change({ target: { checked: true } });
-    assert.ok(elements.bracketBoard.classList.contains('is-focused'));
+    elements.showAllButton.handlers.change({ target: { checked: false } });
+    assert.ok(!elements.bracketBoard.classList.contains('is-focused'));
 
     console.log('Bracket page tests passed');
 })().catch(error => {

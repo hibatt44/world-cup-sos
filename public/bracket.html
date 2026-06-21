@@ -23,7 +23,7 @@
     </header>
 
     <section class="bracket-toolbar" aria-labelledby="bracketTitle">
-      <div>
+      <div class="bracket-toolbar-title">
         <p class="eyebrow">World Cup 2026 knockout bracket</p>
         <h1 id="bracketTitle">Bracket paths</h1>
       </div>
@@ -31,16 +31,18 @@
         <strong>Click any team to trace its route.</strong>
         <span>Two slots per match · probabilities show the chance of occupying that slot.</span>
       </div>
-      <label class="bracket-team-search">
-        <span>Selected team</span>
-        <input id="bracketTeamSearch" type="search" list="bracketTeamOptions" placeholder="Search teams…" autocomplete="off">
-        <datalist id="bracketTeamOptions"></datalist>
-      </label>
-      <label class="bracket-focus-toggle">
-        <input id="showAllButton" type="checkbox" role="switch">
-        <span class="toggle-option toggle-full">Full bracket</span>
+      <div class="bracket-team-search">
+        <label for="bracketTeamSearch">Selected team</label>
+        <input id="bracketTeamSearch" type="search" placeholder="Search teams…" autocomplete="off"
+          role="combobox" aria-autocomplete="list" aria-controls="bracketTeamResults" aria-expanded="false">
+        <div class="team-search-results" id="bracketTeamResults" role="listbox" hidden></div>
+      </div>
+      <label class="bracket-focus-toggle" title="Switch between the selected route and all 31 knockout matches">
+        <span class="toggle-caption">Bracket view</span>
+        <input id="showAllButton" type="checkbox" role="switch" checked>
+        <span class="toggle-option toggle-full">All matches</span>
         <span class="toggle-track" aria-hidden="true"><span></span></span>
-        <span class="toggle-option toggle-focus">Focus path</span>
+        <span class="toggle-option toggle-focus">Selected path</span>
       </label>
     </section>
 

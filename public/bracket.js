@@ -1,4 +1,4 @@
-const state = { data: null, teams: [], lockedTeams: new Set(), selectedTeam: 'US', focused: false };
+const state = { data: null, teams: [], lockedTeams: new Set(), selectedTeam: 'US', focused: true };
 const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   weekday: 'short',
@@ -24,7 +24,7 @@ const bracketDisplayOrder = {
 const els = {
   status: document.querySelector('#statusPill'),
   search: document.querySelector('#bracketTeamSearch'),
-  searchOptions: document.querySelector('#bracketTeamOptions'),
+  searchResults: document.querySelector('#bracketTeamResults'),
   summary: document.querySelector('#pathSummary'),
   board: document.querySelector('#bracketBoard'),
   focus: document.querySelector('#showAllButton')
@@ -66,17 +66,33 @@ function assertCompatibleForecast(data) {
 }
 
 function setupInteractions() {
-  els.searchOptions.innerHTML = state.teams.map(team =>
-    `<option value="${escapeHtml(team.name)}">${escapeHtml(team.code)}</option>`
-  ).join('');
   els.search.addEventListener('input', event => {
-    const query = event.target.value.trim().toLocaleLowerCase();
-    const team = state.teams.find(candidate =>
-      candidate.name.toLocaleLowerCase() === query || candidate.code.toLocaleLowerCase() === query
-    );
-    if (!team) return;
-    state.selectedTeam = team.code;
-    render();
+    renderSearchResults(event.target.value);
+  });
+  els.search.addEventListener('focus', event => {
+    renderSearchResults(event.target.value);
+    event.target.select?.();
+  });
+  els.search.addEventListener('mouseup', event => {
+    event.preventDefault();
+    event.target.select?.();
+  });
+  els.search.addEventListener('blur', () => setTimeout(closeSearchResults, 120));
+  els.search.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeSearchResults();
+    if (event.key !== 'Enter') return;
+    const firstResult = filteredTeams(event.target.value)[0];
+    if (!firstResult) return;
+    event.preventDefault();
+    selectTeam(firstResult.code);
+    closeSearchResults();
+  });
+  els.searchResults.addEventListener('mousedown', event => {
+    const option = event.target.closest?.('[data-search-team]');
+    if (!option) return;
+    event.preventDefault();
+    selectTeam(option.dataset.searchTeam);
+    closeSearchResults();
   });
   els.focus.addEventListener('change', event => {
     state.focused = event.target.checked;
@@ -85,10 +101,40 @@ function setupInteractions() {
   els.board.addEventListener('click', event => {
     const teamButton = event.target.closest?.('[data-team-code]');
     if (!teamButton) return;
-    state.selectedTeam = teamButton.dataset.teamCode;
-    render();
+    selectTeam(teamButton.dataset.teamCode);
   });
   if (typeof window !== 'undefined') window.addEventListener('resize', scheduleConnectorDraw);
+}
+
+function selectTeam(code) {
+  state.selectedTeam = code;
+  render();
+}
+
+function filteredTeams(query) {
+  const normalized = query.trim().toLocaleLowerCase();
+  const matches = normalized
+    ? state.teams.filter(team => team.name.toLocaleLowerCase().includes(normalized) || team.code.toLocaleLowerCase().includes(normalized))
+    : state.teams;
+  return matches.slice(0, 12);
+}
+
+function renderSearchResults(query) {
+  const teams = filteredTeams(query);
+  els.searchResults.innerHTML = teams.length
+    ? teams.map(team => `
+      <button type="button" role="option" data-search-team="${escapeHtml(team.code)}"
+        aria-selected="${team.code === state.selectedTeam}">
+        <span>${escapeHtml(team.name)}</span><small>${escapeHtml(team.code)}</small>
+      </button>`).join('')
+    : '<p>No teams found</p>';
+  els.searchResults.hidden = false;
+  els.search.setAttribute('aria-expanded', 'true');
+}
+
+function closeSearchResults() {
+  els.searchResults.hidden = true;
+  els.search.setAttribute('aria-expanded', 'false');
 }
 
 function render() {
