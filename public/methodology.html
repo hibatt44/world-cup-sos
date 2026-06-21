@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="print">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Methodology | World Cup 2026 SoS Room</title>
-  <meta name="description" content="How the World Cup 2026 strength-of-schedule dashboard calculates Elo difficulty, advancement odds, and title probabilities.">
+  <title>Methodology | World Cup 2026 Forecast</title>
+  <meta name="description" content="How the World Cup 2026 forecast calculates group finishes, advancement odds, bracket paths, and title probabilities.">
   <link rel="stylesheet" href="styles.css">
   <script>
     window.MathJax = {
@@ -25,11 +25,14 @@
   <main class="shell methodology-shell">
     <header class="hero" id="top">
       <nav class="topbar" aria-label="Primary">
-        <a class="brand" href="index.html">World Cup SoS Room</a>
+        <a class="brand" href="index.html">World Cup Forecast</a>
         <div class="nav-links">
-          <a href="index.html">Dashboard</a>
+          <a href="index.html">Group forecast</a>
+          <a href="bracket.html">Bracket paths</a>
           <a aria-current="page" href="methodology.html">Methodology</a>
         </div>
+        <div class="theme-switcher" aria-label="Choose visual design"></div>
+        <div class="status-pill">50,000 simulations</div>
       </nav>
     </header>
 
@@ -105,6 +108,7 @@
       <a class="button primary" href="index.html">Back to dashboard</a>
     </section>
   </main>
+  <script src="theme.js"></script>
 </body>
 
 </html>

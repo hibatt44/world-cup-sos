@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="print">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Cup 2026 Bracket Paths</title>
+  <meta name="description" content="Explore likely World Cup knockout paths from 50,000 Elo simulations.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell bracket-shell">
+    <header class="hero" id="top">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand" href="index.html">World Cup Forecast</a>
+        <div class="nav-links">
+          <a href="index.html">Group forecast</a>
+          <a href="bracket.html" aria-current="page">Bracket paths</a>
+          <a href="methodology.html">Methodology</a>
+        </div>
+        <div class="theme-switcher" aria-label="Choose visual design"></div>
+        <div class="status-pill" id="statusPill">Loading simulations</div>
+      </nav>
+    </header>
+
+    <section class="section bracket-intro">
+      <div class="section-heading">
+        <p class="eyebrow">Knockout route finder</p>
+        <h1>Likely paths to the final</h1>
+        <p class="section-note">Each match has two bracket slots. Confirmed qualifiers are pinned in place; unresolved slots show the teams most likely to fill them across the same Elo simulations used by the group forecast.</p>
+      </div>
+      <div class="bracket-interaction-note">
+        <span>Explore the bracket</span>
+        <strong>Click any team to trace its route.</strong>
+      </div>
+    </section>
+
+    <section class="path-summary" id="pathSummary" aria-live="polite"></section>
+
+    <section class="section" aria-labelledby="bracketTitle">
+      <div class="section-heading split">
+        <div>
+          <p class="eyebrow">Projected bracket</p>
+          <h2 id="bracketTitle">From round of 32 to final</h2>
+        </div>
+        <button class="button" id="showAllButton" type="button" aria-pressed="false">Focus selected path</button>
+      </div>
+      <div class="bracket-scroll">
+        <div class="bracket-board" id="bracketBoard"></div>
+      </div>
+    </section>
+  </main>
+  <script src="theme.js"></script>
+  <script src="bracket.js"></script>
+</body>
+</html>
