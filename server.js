@@ -15,6 +15,9 @@ let cache = {
     teams: { data: null, timestamp: 0 }
 };
 
+// Share an upstream request when multiple API routes need the same cold data.
+const pendingFetches = {};
+
 // Separate cache for Monte Carlo simulation (computed on rankings change)
 let monteCarloCache = {
     data: null,
@@ -22,8 +25,19 @@ let monteCarloCache = {
     resultsTimestamp: 0
 };
 
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTLS = {
+    rankings: 60 * 60 * 1000, // 1 hour
+    results: 5 * 60 * 1000,   // 5 minutes during live play
+    teams: 24 * 60 * 60 * 1000 // 1 day
+};
 const WORLD_CUP_START_DATE = '2026-06-11';
+
+const CDN_CACHE_SECONDS = {
+    rankings: 60 * 60,
+    results: 5 * 60,
+    sos: 5 * 60,
+    groups: 24 * 60 * 60
+};
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -243,21 +257,38 @@ function applyResultToRecord(team1, team2, score1, score2) {
 async function getCachedData(key, filename, parser) {
     const now = Date.now();
 
-    if (cache[key].data && (now - cache[key].timestamp) < CACHE_TTL) {
+    if (cache[key].data && (now - cache[key].timestamp) < CACHE_TTLS[key]) {
         return cache[key].data;
     }
 
-    try {
-        const tsv = await fetchTSV(filename);
-        const data = parser(tsv);
-        cache[key] = { data, timestamp: now };
-        return data;
-    } catch (error) {
-        console.error(`Error fetching ${filename}:`, error);
-        // Return cached data if available, even if stale
-        if (cache[key].data) return cache[key].data;
-        throw error;
+    if (!pendingFetches[key]) {
+        pendingFetches[key] = (async () => {
+            try {
+                const tsv = await fetchTSV(filename);
+                const data = parser(tsv);
+                cache[key] = { data, timestamp: Date.now() };
+                return data;
+            } catch (error) {
+                console.error(`Error fetching ${filename}:`, error);
+                // Return cached data if available, even if stale
+                if (cache[key].data) return cache[key].data;
+                throw error;
+            } finally {
+                delete pendingFetches[key];
+            }
+        })();
     }
+
+    return pendingFetches[key];
+}
+
+function setPublicCacheHeaders(res, seconds) {
+    // Browsers revalidate; Vercel's CDN serves and refreshes the shared response.
+    res.set('Cache-Control', 'public, max-age=0, must-revalidate');
+    res.set(
+        'Vercel-CDN-Cache-Control',
+        `s-maxage=${seconds}, stale-while-revalidate=${seconds}`
+    );
 }
 
 // API Routes
@@ -272,6 +303,7 @@ app.get('/api/rankings', async (req, res) => {
             name: teams[r.code] || r.code
         }));
 
+        setPublicCacheHeaders(res, CDN_CACHE_SECONDS.rankings);
         res.json({ rankings: list, cacheAge: Date.now() - cache.rankings.timestamp });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -289,6 +321,7 @@ app.get('/api/results', async (req, res) => {
             team2Name: teams[r.team2] || r.team2
         }));
 
+        setPublicCacheHeaders(res, CDN_CACHE_SECONDS.results);
         res.json({ results: enrichedResults, cacheAge: Date.now() - cache.results.timestamp });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -346,6 +379,7 @@ app.get('/api/sos', async (req, res) => {
             }));
         }
 
+        setPublicCacheHeaders(res, CDN_CACHE_SECONDS.sos);
         res.json({
             ...sosData,
             worldCupGroups,
@@ -369,6 +403,7 @@ app.get('/api/sos', async (req, res) => {
 });
 
 app.get('/api/groups', (req, res) => {
+    setPublicCacheHeaders(res, CDN_CACHE_SECONDS.groups);
     res.json({ ...worldCupGroups, schedule: worldCupSchedule });
 });
 

@@ -1294,8 +1294,13 @@ select {
 
 .bracket-board.is-focused .bracket-matches {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: center;
+}
+
+.bracket-board.is-focused .bracket-match {
+  width: 100%;
 }
 
 .match-heading {
@@ -1347,7 +1352,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--field);
-  padding: 6px;
+  padding: 4px;
 }
 
 .bracket-slot.is-confirmed {
@@ -1358,11 +1363,11 @@ select {
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   color: var(--muted);
-  font-size: 0.58rem;
-  font-weight: 900;
-  letter-spacing: 0.03em;
+  font-size: 0.56rem;
+  font-weight: 850;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
