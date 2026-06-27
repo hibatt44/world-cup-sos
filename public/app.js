@@ -141,8 +141,7 @@ function renderGroupBoard() {
 }
 
 function groupCard(group) {
-  const advancementOrder = [...(state.sos.groupSimulation[group.group] || [])]
-    .sort((a, b) => b.r32Prob - a.r32Prob);
+  const projectedOrder = projectedFinishOrder(state.sos.groupSimulation[group.group] || []);
   const timingClass = groupTimingClass(group.group);
 
   return `
@@ -160,8 +159,8 @@ function groupCard(group) {
           <span>3rd</span>
           <span>Qual.</span>
         </div>
-        <ol class="group-advance-list" aria-label="Group ${group.group} teams by advancement probability">
-          ${advancementOrder.map(advanceRow).join('')}
+        <ol class="group-advance-list" aria-label="Group ${group.group} teams by projected finish order">
+          ${projectedOrder.map(advanceRow).join('')}
         </ol>
       </button>
     </article>
@@ -201,6 +200,16 @@ function orderedGroups(groups) {
     const bDate = nextGroupDate(b, schedule);
     if (aDate !== bDate) return aDate.localeCompare(bDate);
     return a.localeCompare(b);
+  });
+}
+
+function projectedFinishOrder(teams) {
+  return [...teams].sort((a, b) => {
+    if (b.pos1Prob !== a.pos1Prob) return b.pos1Prob - a.pos1Prob;
+    if (b.pos2Prob !== a.pos2Prob) return b.pos2Prob - a.pos2Prob;
+    if (b.pos3Prob !== a.pos3Prob) return b.pos3Prob - a.pos3Prob;
+    if (b.r32Prob !== a.r32Prob) return b.r32Prob - a.r32Prob;
+    return b.elo - a.elo;
   });
 }
 
@@ -274,11 +283,7 @@ function renderGroup() {
   const group = state.selectedGroup;
   const groupInfo = state.sos.worldCupGroups.groups[group];
   const simulation = state.sos.groupSimulation[group] || [];
-  const simulationByCode = new Map(simulation.map(team => [team.code, team]));
-  const standingsOrder = (state.sos.groupRecords[group] || [])
-    .map(record => simulationByCode.get(record.code))
-    .filter(Boolean);
-  const displayedTeams = standingsOrder.length ? standingsOrder : simulation;
+  const displayedTeams = projectedFinishOrder(simulation);
 
   els.groupDetail.innerHTML = `
     <div class="group-hero">
