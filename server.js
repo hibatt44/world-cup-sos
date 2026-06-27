@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const sosCalculator = require('./lib/sosCalculator');
 const bracketSimulator = require('./lib/bracketSimulator');
@@ -7,6 +8,9 @@ const worldCupSchedule = require('./data/worldCupSchedule.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const CACHE_DIR = path.join(__dirname, '.cache');
+const SOS_CACHE_FILE = path.join(CACHE_DIR, 'sos-latest.json');
+const SNAPSHOT_DIR = path.join(CACHE_DIR, 'forecast-snapshots');
 
 // Cache for TSV data
 let cache = {
@@ -22,7 +26,23 @@ const pendingFetches = {};
 let monteCarloCache = {
     data: null,
     rankingsTimestamp: 0,
-    resultsTimestamp: 0
+    resultsTimestamp: 0,
+    liveScoreSignature: ''
+};
+
+let sosResponseCache = {
+    data: null,
+    rankingsTimestamp: 0,
+    resultsTimestamp: 0,
+    liveScoreSignature: '',
+    generatedAt: 0,
+    refreshPromise: null
+};
+
+let liveScoresCache = {
+    data: null,
+    timestamp: 0,
+    refreshPromise: null
 };
 
 const CACHE_TTLS = {
@@ -36,8 +56,62 @@ const CDN_CACHE_SECONDS = {
     rankings: 60 * 60,
     results: 5 * 60,
     sos: 5 * 60,
+    liveScores: 15,
     groups: 24 * 60 * 60
 };
+const ESPN_WORLD_CUP_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+const LIVE_SCORE_TTL = 15 * 1000;
+const ESPN_TO_ELO_CODES = {
+    ARG: 'AR',
+    ALG: 'DZ',
+    AUS: 'AU',
+    AUT: 'AT',
+    BEL: 'BE',
+    BIH: 'BA',
+    BRA: 'BR',
+    CAN: 'CA',
+    CIV: 'CI',
+    COD: 'CD',
+    COL: 'CO',
+    CPV: 'CV',
+    CRO: 'HR',
+    CUW: 'CW',
+    CZE: 'CZ',
+    ECU: 'EC',
+    EGY: 'EG',
+    ENG: 'EN',
+    ESP: 'ES',
+    FRA: 'FR',
+    GER: 'DE',
+    GHA: 'GH',
+    HAI: 'HT',
+    IRN: 'IR',
+    IRQ: 'IQ',
+    JOR: 'JO',
+    JPN: 'JP',
+    KOR: 'KR',
+    KSA: 'SA',
+    MAR: 'MA',
+    MEX: 'MX',
+    NED: 'NL',
+    NOR: 'NO',
+    NZL: 'NZ',
+    PAN: 'PA',
+    PAR: 'PY',
+    POR: 'PT',
+    QAT: 'QA',
+    RSA: 'ZA',
+    SEN: 'SN',
+    SRB: 'SE',
+    SUI: 'CH',
+    TUN: 'TN',
+    TUR: 'TR',
+    USA: 'US',
+    URU: 'UY',
+    UZB: 'UZ'
+};
+
+hydrateSosCacheFromDisk();
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -189,6 +263,73 @@ function getCompletedGroupMatches(groupData, results) {
     return completed;
 }
 
+function mergeLiveGroupMatches(completedGroupMatches, liveScores, groupData) {
+    const merged = cloneGroupMatches(completedGroupMatches);
+    const groupLookup = getGroupLookup(groupData);
+    const existing = new Set(Object.values(merged)
+        .flat()
+        .map(match => resultMatchKey(match.team1, match.team2)));
+    const provisional = [];
+
+    for (const event of liveScores?.events || []) {
+        if (event.status !== 'in') continue;
+        if (!event.competitors || event.competitors.length < 2) continue;
+        const [home, away] = event.competitors;
+        const team1Group = groupLookup[home.code];
+        const team2Group = groupLookup[away.code];
+        if (!team1Group || team1Group !== team2Group) continue;
+
+        const key = resultMatchKey(home.code, away.code);
+        if (existing.has(key)) continue;
+
+        const match = {
+            group: team1Group,
+            date: event.date?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+            team1: home.code,
+            team2: away.code,
+            score1: home.score,
+            score2: away.score,
+            provisional: true,
+            source: 'espn',
+            espnEventId: event.id,
+            status: event.status,
+            displayClock: event.displayClock
+        };
+
+        if (!merged[team1Group]) merged[team1Group] = [];
+        merged[team1Group].push(match);
+        provisional.push(match);
+        existing.add(key);
+    }
+
+    return { completedGroupMatches: merged, provisionalMatches: provisional };
+}
+
+function cloneGroupMatches(groupMatches) {
+    return Object.fromEntries(Object.entries(groupMatches || {})
+        .map(([group, matches]) => [group, matches.map(match => ({ ...match }))]));
+}
+
+function resultMatchKey(team1, team2) {
+    return [team1, team2].sort().join('-');
+}
+
+function liveScoreSimulationSignature(liveScores) {
+    const groupLookup = getGroupLookup(worldCupGroups);
+    return (liveScores?.events || [])
+        .filter(event => event.status === 'in')
+        .filter(event => event.competitors?.length >= 2)
+        .map(event => {
+            const [home, away] = event.competitors;
+            if (!groupLookup[home.code] || groupLookup[home.code] !== groupLookup[away.code]) return null;
+            const codes = [home.code, away.code].sort();
+            return `${event.id}:${codes.join('-')}:${home.score}-${away.score}:${event.status}`;
+        })
+        .filter(Boolean)
+        .sort()
+        .join('|');
+}
+
 function calculateGroupRecords(groupData, completedGroupMatches, ratings, teams) {
     const records = {};
 
@@ -291,6 +432,132 @@ function setPublicCacheHeaders(res, seconds) {
     );
 }
 
+function hydrateSosCacheFromDisk() {
+    try {
+        const payload = JSON.parse(fs.readFileSync(SOS_CACHE_FILE, 'utf8'));
+        if (!payload?.groupSimulation || !payload?.bracketForecast) return;
+        sosResponseCache.data = payload;
+        sosResponseCache.rankingsTimestamp = payload.cacheMeta?.rankingsTimestamp || 0;
+        sosResponseCache.resultsTimestamp = payload.cacheMeta?.resultsTimestamp || 0;
+        sosResponseCache.liveScoreSignature = payload.liveProjection?.signature || '';
+        sosResponseCache.generatedAt = payload.lastUpdated ? new Date(payload.lastUpdated).getTime() : Date.now();
+        monteCarloCache.data = {
+            groupSimulation: payload.groupSimulation,
+            bracketForecast: payload.bracketForecast,
+            simulations: payload.simulationCount
+        };
+        monteCarloCache.rankingsTimestamp = sosResponseCache.rankingsTimestamp;
+        monteCarloCache.resultsTimestamp = sosResponseCache.resultsTimestamp;
+        monteCarloCache.liveScoreSignature = sosResponseCache.liveScoreSignature;
+        console.log(`Loaded cached SOS forecast from ${SOS_CACHE_FILE}`);
+    } catch (error) {
+        if (error.code !== 'ENOENT') console.error('Could not load cached SOS forecast:', error.message);
+    }
+}
+
+function writeJsonCache(file, data) {
+    try {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        const tempFile = `${file}.${process.pid}.tmp`;
+        fs.writeFileSync(tempFile, JSON.stringify(data));
+        fs.renameSync(tempFile, file);
+    } catch (error) {
+        console.error(`Could not write cache file ${file}:`, error.message);
+    }
+}
+
+function persistSosPayload(payload) {
+    writeJsonCache(SOS_CACHE_FILE, payload);
+    persistForecastSnapshot(payload);
+}
+
+function persistForecastSnapshot(payload) {
+    const snapshot = buildForecastSnapshot(payload);
+    if (!snapshot) return;
+    writeJsonCache(path.join(SNAPSHOT_DIR, `${snapshot.date}.json`), snapshot);
+}
+
+function buildForecastSnapshot(payload) {
+    const teams = Object.values(payload.groupSimulation || {}).flat();
+    if (!teams.length) return null;
+    return {
+        date: localDateKey(new Date(payload.lastUpdated || Date.now())),
+        generatedAt: payload.lastUpdated || new Date().toISOString(),
+        simulationCount: payload.simulationCount,
+        probabilities: Object.fromEntries(teams.map(team => [
+            team.code,
+            {
+                r32Prob: team.r32Prob,
+                r16Prob: team.r16Prob,
+                qfProb: team.qfProb,
+                sfProb: team.sfProb,
+                finalProb: team.finalProb,
+                winProb: team.winProb
+            }
+        ]))
+    };
+}
+
+function loadForecastSnapshotForDate(dateKey) {
+    try {
+        return JSON.parse(fs.readFileSync(path.join(SNAPSHOT_DIR, `${dateKey}.json`), 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function forecastBaselineFor(payload) {
+    const today = localDateKey(new Date(payload.lastUpdated || Date.now()));
+    const yesterday = offsetDateKey(today, -1);
+    const yesterdaySnapshot = loadForecastSnapshotForDate(yesterday);
+    const latestSnapshot = buildForecastSnapshot(payload);
+    const fallbackSnapshot = loadForecastSnapshotForDate(today);
+
+    if (yesterdaySnapshot) {
+        return {
+            label: `Since ${formatSnapshotLabel(yesterday)}`,
+            date: yesterday,
+            probabilities: yesterdaySnapshot.probabilities
+        };
+    }
+
+    if (fallbackSnapshot?.probabilities) {
+        return {
+            label: 'Since previous forecast',
+            date: today,
+            probabilities: fallbackSnapshot.probabilities
+        };
+    }
+
+    return {
+        label: 'Since forecast start',
+        date: today,
+        probabilities: latestSnapshot?.probabilities || {}
+    };
+}
+
+function localDateKey(date) {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Chicago',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(date);
+}
+
+function offsetDateKey(dateKey, offsetDays) {
+    const date = new Date(`${dateKey}T12:00:00-05:00`);
+    date.setDate(date.getDate() + offsetDays);
+    return localDateKey(date);
+}
+
+function formatSnapshotLabel(dateKey) {
+    return new Date(`${dateKey}T12:00:00-05:00`).toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
 // API Routes
 
 app.get('/api/rankings', async (req, res) => {
@@ -328,23 +595,181 @@ app.get('/api/results', async (req, res) => {
     }
 });
 
+app.get('/api/live-scores', async (req, res) => {
+    try {
+        const liveScores = await getLiveScores();
+        res.set('Cache-Control', `public, max-age=${CDN_CACHE_SECONDS.liveScores}`);
+        res.json(liveScores);
+    } catch (error) {
+        console.error('Error in /api/live-scores:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/sos', async (req, res) => {
     try {
-        const rankings = await getCachedData('rankings', 'World.tsv', parseRankings);
-        const teams = await getCachedData('teams', 'en.teams.tsv', parseTeams);
-        const results = await getCachedData('results', 'latest.tsv', parseResults);
+        const sos = await getSosPayload();
+        setPublicCacheHeaders(res, CDN_CACHE_SECONDS.sos);
+        res.json(sos);
+    } catch (error) {
+        console.error('Error in /api/sos:', error);
+        res.status(500).json({
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
+async function getLiveScores() {
+    const cacheStillFresh = liveScoresCache.data &&
+        Date.now() - liveScoresCache.timestamp < LIVE_SCORE_TTL;
+
+    if (cacheStillFresh) return markLiveScoreCacheState(liveScoresCache.data);
+    if (liveScoresCache.refreshPromise) return liveScoresCache.refreshPromise;
+
+    liveScoresCache.refreshPromise = (async () => {
+        const response = await fetch(espnScoreboardUrl());
+        if (!response.ok) throw new Error(`ESPN scoreboard unavailable: ${response.status}`);
+        const scoreboard = await response.json();
+        const payload = {
+            source: 'espn',
+            sourceUrl: ESPN_WORLD_CUP_SCOREBOARD,
+            generatedAt: new Date().toISOString(),
+            events: normalizeEspnScoreboard(scoreboard)
+        };
+
+        liveScoresCache = {
+            data: payload,
+            timestamp: Date.now(),
+            refreshPromise: null
+        };
+        return markLiveScoreCacheState(payload);
+    })();
+
+    try {
+        return await liveScoresCache.refreshPromise;
+    } finally {
+        liveScoresCache.refreshPromise = null;
+    }
+}
+
+function espnScoreboardUrl() {
+    const from = dateKeyWithOffset(-1).replaceAll('-', '');
+    const to = dateKeyWithOffset(2).replaceAll('-', '');
+    const url = new URL(ESPN_WORLD_CUP_SCOREBOARD);
+    url.searchParams.set('limit', '200');
+    url.searchParams.set('dates', `${from}-${to}`);
+    return url;
+}
+
+function dateKeyWithOffset(offsetDays) {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + offsetDays);
+    return date.toISOString().slice(0, 10);
+}
+
+function normalizeEspnScoreboard(scoreboard) {
+    return (scoreboard.events || []).map(event => {
+        const competition = event.competitions?.[0] || {};
+        const status = competition.status || event.status || {};
+        const statusType = status.type || {};
+        const competitors = (competition.competitors || []).map(competitor => ({
+            homeAway: competitor.homeAway,
+            score: Number.parseInt(competitor.score, 10) || 0,
+            code: ESPN_TO_ELO_CODES[competitor.team?.abbreviation] || competitor.team?.abbreviation || null,
+            espnCode: competitor.team?.abbreviation || null,
+            name: competitor.team?.displayName || competitor.team?.shortDisplayName || competitor.team?.name || 'TBD',
+            shortName: competitor.team?.shortDisplayName || competitor.team?.displayName || 'TBD'
+        }));
+
+        return {
+            id: event.id,
+            name: event.name,
+            shortName: event.shortName,
+            date: event.date,
+            status: statusType.state || 'pre',
+            completed: Boolean(statusType.completed),
+            detail: statusType.detail || statusType.shortDetail || statusType.description || '',
+            displayClock: status.displayClock || '',
+            period: status.period || 0,
+            venue: competition.venue?.fullName || competition.venue?.displayName || '',
+            competitors
+        };
+    }).sort((a, b) => liveScoreRank(a) - liveScoreRank(b) || new Date(a.date) - new Date(b.date));
+}
+
+function liveScoreRank(event) {
+    if (event.status === 'in') return 0;
+    if (event.status === 'pre') return 1;
+    return 2;
+}
+
+function markLiveScoreCacheState(payload) {
+    return {
+        ...payload,
+        cacheAge: Date.now() - liveScoresCache.timestamp
+    };
+}
+
+async function getSosPayload() {
+    const liveScores = await getLiveScoresForForecast();
+    const liveScoreSignature = liveScoreSimulationSignature(liveScores);
+    const liveScoreChanged = sosResponseCache.liveScoreSignature !== liveScoreSignature;
+    const cacheStillFresh = sosResponseCache.data &&
+        Date.now() - sosResponseCache.generatedAt < CACHE_TTLS.results &&
+        !liveScoreChanged;
+
+    if (cacheStillFresh) return decorateSosPayload(sosResponseCache.data, false);
+
+    if (sosResponseCache.data && !liveScoreChanged) {
+        refreshSosPayload(liveScores, liveScoreSignature).catch(error => {
+            console.error('Background /api/sos refresh failed:', error);
+        });
+        return decorateSosPayload(sosResponseCache.data, true);
+    }
+
+    return refreshSosPayload(liveScores, liveScoreSignature);
+}
+
+async function getLiveScoresForForecast() {
+    try {
+        return await getLiveScores();
+    } catch (error) {
+        console.error('Live score forecast input unavailable:', error.message);
+        return { events: [] };
+    }
+}
+
+async function refreshSosPayload(liveScores = { events: [] }, liveScoreSignature = '') {
+    if (sosResponseCache.refreshPromise) return sosResponseCache.refreshPromise;
+
+    sosResponseCache.refreshPromise = (async () => {
+        const [rankings, teams, results] = await Promise.all([
+            getCachedData('rankings', 'World.tsv', parseRankings),
+            getCachedData('teams', 'en.teams.tsv', parseTeams),
+            getCachedData('results', 'latest.tsv', parseResults)
+        ]);
 
         const sosData = sosCalculator.calculateAllSoS(worldCupGroups, rankings.map);
         const playoffSim = sosCalculator.simulatePlayoffSoS(worldCupGroups, rankings.map);
-        const completedGroupMatches = getCompletedGroupMatches(worldCupGroups, results);
+        const confirmedGroupMatches = getCompletedGroupMatches(worldCupGroups, results);
+        const { completedGroupMatches, provisionalMatches } = mergeLiveGroupMatches(
+            confirmedGroupMatches,
+            liveScores,
+            worldCupGroups
+        );
         const groupRecords = calculateGroupRecords(worldCupGroups, completedGroupMatches, rankings.map, teams);
 
-        // Run bracket-aware tournament simulation only if rankings or group results have changed
+        // Run bracket-aware tournament simulation only if rankings or group results have changed.
         if (
             monteCarloCache.rankingsTimestamp !== cache.rankings.timestamp ||
-            monteCarloCache.resultsTimestamp !== cache.results.timestamp
+            monteCarloCache.resultsTimestamp !== cache.results.timestamp ||
+            monteCarloCache.liveScoreSignature !== liveScoreSignature
         ) {
-            console.log('Running bracket-aware tournament simulation (50,000 iterations)...');
+            const liveLabel = provisionalMatches.length
+                ? ` with live score projection ${liveScoreSignature}`
+                : '';
+            console.log(`Running bracket-aware tournament simulation (50,000 iterations)${liveLabel}...`);
             const startTime = Date.now();
             monteCarloCache.data = bracketSimulator.simulateTournament(
                 worldCupGroups,
@@ -356,16 +781,15 @@ app.get('/api/sos', async (req, res) => {
             );
             monteCarloCache.rankingsTimestamp = cache.rankings.timestamp;
             monteCarloCache.resultsTimestamp = cache.results.timestamp;
+            monteCarloCache.liveScoreSignature = liveScoreSignature;
             console.log(`Tournament simulation completed in ${Date.now() - startTime}ms`);
         }
 
-        // Enrich with team names
         sosData.teams = sosData.teams.map(t => ({
             ...t,
             name: teams[t.code] || t.code
         }));
 
-        // Enrich playoff simulation with team names when unresolved paths exist.
         for (const bracket of Object.values(playoffSim.intercontinental || {})) {
             bracket.teams = bracket.teams.map(t => ({
                 ...t,
@@ -379,8 +803,7 @@ app.get('/api/sos', async (req, res) => {
             }));
         }
 
-        setPublicCacheHeaders(res, CDN_CACHE_SECONDS.sos);
-        res.json({
+        const payload = {
             ...sosData,
             worldCupGroups,
             worldCupSchedule,
@@ -390,17 +813,43 @@ app.get('/api/sos', async (req, res) => {
             simulationCount: monteCarloCache.data.simulations,
             groupRecords,
             completedGroupMatches,
-            cacheAge: Date.now() - cache.rankings.timestamp,
+            liveProjection: {
+                active: provisionalMatches.some(match => match.provisional),
+                signature: liveScoreSignature,
+                matches: provisionalMatches
+            },
+            cacheMeta: {
+                rankingsTimestamp: cache.rankings.timestamp,
+                resultsTimestamp: cache.results.timestamp
+            },
+            cacheAge: Date.now() - Math.min(cache.rankings.timestamp, cache.results.timestamp),
             lastUpdated: new Date().toISOString()
-        });
-    } catch (error) {
-        console.error('Error in /api/sos:', error);
-        res.status(500).json({
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
+        };
+
+        sosResponseCache.data = payload;
+        sosResponseCache.rankingsTimestamp = cache.rankings.timestamp;
+        sosResponseCache.resultsTimestamp = cache.results.timestamp;
+        sosResponseCache.liveScoreSignature = liveScoreSignature;
+        sosResponseCache.generatedAt = Date.now();
+        persistSosPayload(payload);
+        return decorateSosPayload(payload, false);
+    })();
+
+    try {
+        return await sosResponseCache.refreshPromise;
+    } finally {
+        sosResponseCache.refreshPromise = null;
     }
-});
+}
+
+function decorateSosPayload(payload, stale) {
+    return {
+        ...payload,
+        forecastBaseline: forecastBaselineFor(payload),
+        servedStale: stale,
+        cacheAge: payload.lastUpdated ? Date.now() - new Date(payload.lastUpdated).getTime() : payload.cacheAge
+    };
+}
 
 app.get('/api/groups', (req, res) => {
     setPublicCacheHeaders(res, CDN_CACHE_SECONDS.groups);

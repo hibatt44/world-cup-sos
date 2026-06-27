@@ -22,6 +22,9 @@ logs/
 *.log
 npm-debug.log*
 
+# Runtime cache
+.cache/
+
 # Test files (keep in repo but ignore local test outputs)
 __pycache__/
 *.pyc

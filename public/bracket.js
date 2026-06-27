@@ -1,4 +1,11 @@
-const state = { data: null, teams: [], lockedTeams: new Set(), selectedTeam: 'US', focused: true };
+const state = {
+  data: null,
+  liveScores: null,
+  teams: [],
+  lockedTeams: new Set(),
+  selectedTeam: 'US',
+  focused: true
+};
 const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   weekday: 'short',
@@ -25,7 +32,9 @@ const els = {
   status: document.querySelector('#statusPill'),
   search: document.querySelector('#bracketTeamSearch'),
   searchResults: document.querySelector('#bracketTeamResults'),
+  liveScores: document.querySelector('#liveScoreStrip'),
   summary: document.querySelector('#pathSummary'),
+  tracker: document.querySelector('#bracketTracker'),
   board: document.querySelector('#bracketBoard'),
   focus: document.querySelector('#showAllButton')
 };
@@ -45,7 +54,11 @@ async function init() {
     state.focused = Boolean(state.selectedTeam);
     setupInteractions();
     render();
+    loadLiveScores();
+    if (typeof window !== 'undefined') window.setInterval(loadLiveScores, 30 * 1000);
     els.status.textContent = `${Number(state.data.simulationCount || 50000).toLocaleString()} simulations loaded`;
+    if (state.data.liveProjection?.active) els.status.textContent += ' · live projection';
+    if (state.data.servedStale) els.status.textContent += ' · refreshing';
     els.status.classList.add('is-live');
   } catch (error) {
     els.status.textContent = 'Simulation unavailable';
@@ -149,8 +162,101 @@ function closeSearchResults() {
 function render() {
   syncSelectedTeamControl();
   syncViewToggle();
+  renderLiveScores();
   renderSummary();
+  renderTracker();
   renderBracket();
+}
+
+async function loadLiveScores() {
+  if (!els.liveScores) return;
+  try {
+    const response = await fetch('/api/live-scores');
+    if (!response.ok) throw new Error('Could not load live scores');
+    state.liveScores = await response.json();
+    renderLiveScores();
+  } catch {
+    state.liveScores = { events: [], unavailable: true };
+    renderLiveScores();
+  }
+}
+
+function renderLiveScores() {
+  if (!els.liveScores) return;
+  const events = prioritizeLiveEvents(state.liveScores?.events || []);
+  els.liveScores.classList.toggle('is-empty', !events.length);
+  if (state.liveScores?.unavailable) {
+    els.liveScores.innerHTML = '<div class="live-score-empty"><strong>Live scores unavailable</strong><span>Using forecast data only.</span></div>';
+    return;
+  }
+  if (!events.length) {
+    els.liveScores.innerHTML = '<div class="live-score-empty"><strong>No live World Cup matches right now</strong><span>Scores will appear here from ESPN when matches are active.</span></div>';
+    return;
+  }
+
+  els.liveScores.innerHTML = `
+    <div class="live-score-title">
+      <span class="label">ESPN scores</span>
+      <strong>${events.some(event => event.status === 'in') ? 'Live now' : 'Match window'}</strong>
+    </div>
+    <div class="live-score-list">
+      ${events.slice(0, 6).map(liveScoreCard).join('')}
+    </div>`;
+}
+
+function prioritizeLiveEvents(events) {
+  return [...events]
+    .filter(event => event.competitors?.length >= 2)
+    .sort((a, b) => selectedEventRank(a) - selectedEventRank(b) || liveEventRank(a) - liveEventRank(b) || new Date(a.date) - new Date(b.date));
+}
+
+function selectedEventRank(event) {
+  return event.competitors.some(team => team.code === state.selectedTeam) ? 0 : 1;
+}
+
+function liveEventRank(event) {
+  if (event.status === 'in') return 0;
+  if (event.status === 'pre') return 1;
+  return 2;
+}
+
+function liveScoreCard(event) {
+  const [home, away] = event.competitors;
+  const selected = event.competitors.some(team => team.code === state.selectedTeam);
+  return `
+    <article class="live-score-card ${selected ? 'is-selected' : ''}">
+      <div class="live-score-status ${event.status === 'in' ? 'is-live' : ''}">
+        ${escapeHtml(scoreStatusLabel(event))}
+      </div>
+      <div class="live-score-teams">
+        ${scoreTeamRow(home, event.status !== 'pre')}
+        ${scoreTeamRow(away, event.status !== 'pre')}
+      </div>
+    </article>`;
+}
+
+function scoreTeamRow(team, showScore) {
+  return `
+    <div class="live-score-team ${team.code === state.selectedTeam ? 'is-selected' : ''}">
+      <span>${escapeHtml(team.shortName || team.name)}</span>
+      <strong>${showScore ? escapeHtml(team.score) : escapeHtml(team.espnCode || team.code || '')}</strong>
+    </div>`;
+}
+
+function scoreStatusLabel(event) {
+  if (event.status === 'in') return event.displayClock || event.detail || 'Live';
+  if (event.completed) return 'Final';
+  return formatKickoff(event.date);
+}
+
+function formatKickoff(value) {
+  if (!value) return 'Scheduled';
+  return new Date(value).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
 }
 
 function syncSelectedTeamControl() {
@@ -176,22 +282,43 @@ function renderSummary() {
     return;
   }
   const stages = [
-    ['Qualify', team.r32Prob],
-    ['Reach R16', team.r16Prob],
-    ['Reach QF', team.qfProb],
-    ['Reach SF', team.sfProb],
-    ['Reach final', team.finalProb],
-    ['Win title', team.winProb]
+    ['R16', team.r16Prob, 'r16Prob'],
+    ['QF', team.qfProb, 'qfProb'],
+    ['Final', team.finalProb, 'finalProb'],
+    ['Title', team.winProb, 'winProb']
   ];
+  const path = canonicalPath(team.code);
   els.summary.innerHTML = `
     <div class="path-summary-copy">
       <span class="label">Selected team</span>
-      <strong>${escapeHtml(team.name)}</strong>
-      <small>${escapeHtml(team.elo)} Elo · ${percent(team.finalProb)} final</small>
+      <strong>${flagEmoji(team.code) ? `<span class="selected-team-flag">${escapeHtml(flagEmoji(team.code))}</span>` : ''}${escapeHtml(team.name)}</strong>
+      <small>${escapeHtml(team.elo)} Elo${deltaLabel() ? ` · ${escapeHtml(deltaLabel())}` : ''}</small>
     </div>
-    <div class="path-prob-strip">
-      ${stages.map(([label, value]) => `<div><span>${label}</span><strong>${percent(value)}</strong></div>`).join('')}
+    <div class="path-odds-chart" aria-label="Selected team odds">
+      ${stages.map(([label, value, key]) => oddsChartItem(label, value, deltaBadge(team.code, key))).join('')}
+    </div>
+    <div class="path-route-line">
+      <span class="label">Likely opponents if reached</span>
+      <div class="route-opponent-strip">
+        ${routeOpponentItems(team.code, path)}
+      </div>
     </div>`;
+}
+
+function renderTracker() {
+  if (!els.tracker) return;
+  const team = selectedTeam();
+  els.tracker.classList.toggle('is-empty', !team);
+  if (!team) {
+    els.tracker.innerHTML = `
+      <div class="tracker-empty">
+        <strong>No team selected</strong>
+        <span>Select a team to see its next match, most likely opponents, and probability movement.</span>
+      </div>`;
+    return;
+  }
+
+  els.tracker.innerHTML = '';
 }
 
 function likelyPathSentence(team) {
@@ -203,6 +330,93 @@ function likelyPathSentence(team) {
     return opponent ? `${label}: ${escapeHtml(opponent.name)}` : null;
   }).filter(Boolean);
   return route.length ? `Most visible route markers: ${route.join(' · ')}.` : 'This team rarely reaches the knockout bracket in the current simulation.';
+}
+
+function oddsChartItem(label, value, delta) {
+  const width = Math.max(2, Math.min(100, (value || 0) * 100));
+  return `
+    <div class="odds-chart-item" style="--odds-width:${width}%">
+      <span>${escapeHtml(label)}</span>
+      <div class="odds-bar" aria-hidden="true"><span></span></div>
+      <strong>${percent(value)} ${delta}</strong>
+    </div>`;
+}
+
+function routeOpponentItems(code, path) {
+  const items = rounds.map(([key, label]) => routeOpponentItem(code, key, label, path[key])).filter(Boolean);
+  return items.length ? items.join('') : '<span class="muted-chip">No clear knockout path</span>';
+}
+
+function routeOpponentItem(code, round, label, match) {
+  if (!match || contenderProbability(match, code) <= 0.001) return null;
+  const opponent = match.opponentsByTeam?.[code]?.[0];
+  const roundChance = selectedTeam()?.[roundProbabilityKey(round)];
+  const opponentProbability = opponent ? opponent.probability : contenderProbability(match, code);
+  const opponentElo = opponent ? teamElo(opponent.code) : 0;
+  const beatChance = opponentElo ? knockoutWinProbability(teamElo(code), opponentElo) : null;
+  const opponentFlag = opponent ? flagEmoji(opponent.code) : '';
+  const selectedFlag = flagEmoji(code);
+  return `
+    <span class="route-opponent route-${escapeHtml(round)}">
+      <span class="route-opponent-head">
+        <em>${escapeHtml(shortRoundLabel(label))}</em>
+        <strong>
+          ${opponentFlag ? `<span class="route-team-flag">${escapeHtml(opponentFlag)}</span>` : ''}
+          <span class="route-team-name">${opponent ? escapeHtml(routeTeamName(opponent.name)) : 'TBD'}</span>
+          ${opponentElo ? `<span class="route-team-elo">- ${escapeHtml(opponentElo)} ELO</span>` : ''}
+        </strong>
+      </span>
+      <span class="route-beat">
+        <b>${selectedFlag ? `<span>${escapeHtml(selectedFlag)}</span>` : ''}${Number.isFinite(beatChance) ? percent(beatChance) : 'TBD'}</b>
+        <span>win chance</span>
+      </span>
+      <span class="route-context">
+        ${Number.isFinite(roundChance) ? `<span>${percent(roundChance)} reach</span>` : ''}
+        <span>${percent(opponentProbability)} opponent</span>
+      </span>
+    </span>`;
+}
+
+function shortRoundLabel(label) {
+  return ({
+    'Round of 32': 'R32',
+    'Round of 16': 'R16',
+    Quarterfinals: 'QF',
+    Semifinals: 'SF',
+    Final: 'Final'
+  })[label] || label;
+}
+
+function routeTeamName(name) {
+  return name === 'Bosnia and Herzegovina' ? 'Bosnia' : name;
+}
+
+function flagEmoji(code) {
+  const flagCodes = {
+    AR: 'AR', AT: 'AT', AU: 'AU', BA: 'BA', BE: 'BE', BR: 'BR', CA: 'CA', CD: 'CD',
+    CH: 'CH', CI: 'CI', CO: 'CO', CV: 'CV', CW: 'CW', CZ: 'CZ', DE: 'DE', DZ: 'DZ',
+    EC: 'EC', EG: 'EG', ES: 'ES', FR: 'FR', GH: 'GH', HR: 'HR', HT: 'HT', IQ: 'IQ',
+    IR: 'IR', JO: 'JO', JP: 'JP', KR: 'KR', MA: 'MA', MX: 'MX', NL: 'NL', NO: 'NO',
+    NZ: 'NZ', PA: 'PA', PT: 'PT', PY: 'PY', QA: 'QA', SA: 'SA', SE: 'RS', SN: 'SN',
+    SQ: 'SK', TN: 'TN', TR: 'TR',
+    US: 'US', UY: 'UY', UZ: 'UZ', ZA: 'ZA'
+  };
+  if (code === 'EN') return '🏴';
+  const countryCode = flagCodes[code];
+  if (!countryCode) return '';
+  return countryCode
+    .toUpperCase()
+    .replace(/./g, character => String.fromCodePoint(127397 + character.charCodeAt(0)));
+}
+
+function roundProbabilityKey(round) {
+  return ({
+    r32: 'r32Prob',
+    r16: 'r16Prob',
+    qf: 'qfProb',
+    sf: 'sfProb',
+    final: 'finalProb'
+  })[round];
 }
 
 function renderBracket() {
@@ -295,6 +509,16 @@ function formatDate(date) {
   return dateFormatter.format(new Date(`${date}T00:00:00Z`));
 }
 
+function formatDateTime(value) {
+  if (!value) return 'just now';
+  return new Date(value).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
 function scheduleConnectorDraw() {
   if (typeof window === 'undefined' || typeof requestAnimationFrame !== 'function') return;
   requestAnimationFrame(drawConnections);
@@ -359,6 +583,90 @@ function nextRound(round) {
 
 function contenderProbability(match, code) {
   return match.contenders.find(team => team.code === code)?.probability || 0;
+}
+
+function selectedTeam() {
+  return state.teams.find(candidate => candidate.code === state.selectedTeam);
+}
+
+function nextPathStep(code, path) {
+  return rounds.map(([key, label]) => ({ key, label, match: path[key] }))
+    .find(step => step.match && contenderProbability(step.match, code) > 0.001);
+}
+
+function opponentChip(opponent) {
+  return `<span class="opponent-chip">${escapeHtml(opponent.name)} <strong>${percent(opponent.probability)}</strong></span>`;
+}
+
+function matchStatusText(match) {
+  const schedule = state.data.worldCupSchedule?.knockout?.[match.match];
+  if (!schedule?.date) return 'Schedule TBD';
+  const matchDate = new Date(`${schedule.date}T23:59:59Z`);
+  return matchDate < new Date()
+    ? 'Awaiting confirmed score'
+    : `${formatDate(schedule.date)} · scheduled`;
+}
+
+function forecastStateLabel() {
+  if (state.data.liveProjection?.active) return 'If live scores hold';
+  return state.data.servedStale ? 'Refreshing in background' : 'Current cache';
+}
+
+function liveProjectionSummary() {
+  const matches = state.data.liveProjection?.matches || [];
+  const active = matches.filter(match => match.provisional);
+  if (!active.length) return '';
+  return active.slice(0, 2).map(match => {
+    const team1 = state.teams.find(team => team.code === match.team1)?.name || match.team1;
+    const team2 = state.teams.find(team => team.code === match.team2)?.name || match.team2;
+    return `${team1} ${match.score1}-${match.score2} ${team2}`;
+  }).join(' · ');
+}
+
+function averageLikelyOpponentElo(code, path) {
+  const opponents = rounds
+    .map(([key]) => path[key]?.opponentsByTeam?.[code]?.[0])
+    .filter(Boolean)
+    .map(opponent => teamElo(opponent.code))
+    .filter(Boolean);
+  if (!opponents.length) return null;
+  return opponents.reduce((sum, elo) => sum + elo, 0) / opponents.length;
+}
+
+function hardestLikelyOpponent(code, path) {
+  return rounds
+    .map(([key]) => path[key]?.opponentsByTeam?.[code]?.[0])
+    .filter(Boolean)
+    .map(opponent => ({ ...opponent, elo: teamElo(opponent.code) }))
+    .filter(opponent => opponent.elo)
+    .sort((a, b) => b.elo - a.elo)[0];
+}
+
+function teamElo(code) {
+  return state.teams.find(team => team.code === code)?.elo || 0;
+}
+
+function knockoutWinProbability(teamRating, opponentRating) {
+  if (!teamRating || !opponentRating) return null;
+  return 1 / (1 + Math.pow(10, (opponentRating - teamRating) / 400));
+}
+
+function deltaBadge(code, key) {
+  const current = state.teams.find(team => team.code === code)?.[key];
+  const previous = state.data.forecastBaseline?.probabilities?.[code]?.[key];
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return '';
+  const delta = (current - previous) * 100;
+  if (Math.abs(delta) < 0.05) return '';
+  const direction = delta > 0 ? 'up' : 'down';
+  const sign = delta > 0 ? '+' : '';
+  return `<em class="odds-delta is-${direction}">${sign}${formatter.format(delta)}</em>`;
+}
+
+function deltaLabel() {
+  const label = state.data.forecastBaseline?.label;
+  return label && Object.keys(state.data.forecastBaseline?.probabilities || {}).length
+    ? label
+    : '';
 }
 
 function percent(value) {
