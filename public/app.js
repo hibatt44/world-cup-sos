@@ -47,7 +47,9 @@ async function init() {
 
     state.sos = sos;
     if (sos.worldCupSchedule) {
-      state.selectedDate = clampDate(state.selectedDate, sos.worldCupSchedule.groupStageStart, sos.worldCupSchedule.groupStageEnd);
+      state.selectedDate = isAfterGroupStage()
+        ? sos.worldCupSchedule.groupStageEnd
+        : clampDate(state.selectedDate, sos.worldCupSchedule.groupStageStart, sos.worldCupSchedule.groupStageEnd);
     }
     state.rankings = rankings.rankings || [];
     state.results = results.results || [];
@@ -173,6 +175,9 @@ function renderScheduleControls() {
   els.scheduleDate.min = schedule.groupStageStart;
   els.scheduleDate.max = schedule.groupStageEnd;
   els.scheduleDate.value = state.selectedDate;
+  if (isAfterGroupStage() && els.todayButton) {
+    els.todayButton.textContent = 'Final day';
+  }
   els.scheduleDate.addEventListener('change', event => {
     state.selectedDate = event.target.value;
     const firstGroup = orderedGroups(Object.keys(state.sos.worldCupGroups.groups))[0];
@@ -182,7 +187,7 @@ function renderScheduleControls() {
     renderGroup();
   });
   els.todayButton.addEventListener('click', () => {
-    const today = localDateKey(new Date());
+    const today = isAfterGroupStage() ? schedule.groupStageEnd : localDateKey(new Date());
     state.selectedDate = clampDate(today, schedule.groupStageStart, schedule.groupStageEnd);
     els.scheduleDate.value = state.selectedDate;
     const firstGroup = orderedGroups(Object.keys(state.sos.worldCupGroups.groups))[0];
@@ -219,6 +224,7 @@ function nextGroupDate(group, schedule = state.sos?.worldCupSchedule?.groups || 
 }
 
 function scheduleLabel(group) {
+  if (isAfterGroupStage()) return 'Group stage complete';
   const date = nextGroupDate(group);
   if (date === '9999-12-31') return 'Group stage complete';
   if (date === state.selectedDate) return 'Playing today';
@@ -227,10 +233,16 @@ function scheduleLabel(group) {
 }
 
 function groupTimingClass(group) {
+  if (isAfterGroupStage()) return '';
   const date = nextGroupDate(group);
   if (date === state.selectedDate) return 'playing-today';
   if (date === shiftDate(state.selectedDate, 1)) return 'playing-tomorrow';
   return '';
+}
+
+function isAfterGroupStage() {
+  const end = state.sos?.worldCupSchedule?.groupStageEnd;
+  return Boolean(end && localDateKey(new Date()) > end);
 }
 
 function advanceRow(team, index) {

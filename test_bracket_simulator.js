@@ -17,6 +17,34 @@ const result = simulateTournament(
     simulationCount
 );
 
+const completedGroupMatches = Object.fromEntries(Object.entries(worldCupGroups.groups).map(([group, info]) => [
+    group,
+    deterministicGroupResults(group, info.teams)
+]));
+const lockedWinner = worldCupGroups.groups.A.teams[1];
+const lockedLoser = worldCupGroups.groups.B.teams[1];
+const lockedResult = simulateTournament(
+    worldCupGroups,
+    ratings,
+    {},
+    names,
+    50,
+    completedGroupMatches,
+    {
+        1: {
+            match: 1,
+            round: 'r32',
+            team1: lockedWinner,
+            team2: lockedLoser,
+            winner: lockedWinner,
+            loser: lockedLoser,
+            score1: 2,
+            score2: 1,
+            provisional: false
+        }
+    }
+);
+
 assert.equal(result.simulations, simulationCount);
 assert.equal(Object.keys(thirdPlaceMatrix).length, 495);
 assert.equal(new Set(teamCodes).size, 48);
@@ -109,6 +137,12 @@ for (const team of Object.values(result.groupSimulation).flat()) {
     }
 }
 
+const lockedWinnerForecast = Object.values(lockedResult.groupSimulation).flat().find(team => team.code === lockedWinner);
+const lockedLoserForecast = Object.values(lockedResult.groupSimulation).flat().find(team => team.code === lockedLoser);
+assert.equal(lockedWinnerForecast.r16Prob, 1, 'completed R32 winner should always advance to R16');
+assert.equal(lockedLoserForecast.r16Prob, 0, 'completed R32 loser should be eliminated from R16');
+assert.equal(lockedResult.bracketForecast.r32.find(match => match.match === 1).completed.winner, lockedWinner);
+
 function resolveCurrentR32Slot(slot, match) {
     const position = Number(slot[0]);
     if (position === 1 || position === 2) {
@@ -117,6 +151,22 @@ function resolveCurrentR32Slot(slot, match) {
     }
 
     return bosniaThirdPlaceAssignments[match.match]?.code || null;
+}
+
+function deterministicGroupResults(group, teams) {
+    const results = [];
+    for (let i = 0; i < teams.length; i++) {
+        for (let j = i + 1; j < teams.length; j++) {
+            results.push({
+                group,
+                team1: teams[i],
+                team2: teams[j],
+                score1: 1,
+                score2: 0
+            });
+        }
+    }
+    return results;
 }
 
 console.log('Bracket simulator tests passed');

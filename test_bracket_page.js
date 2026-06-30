@@ -80,6 +80,7 @@ const data = {
             { officialMatch: match + 72, date: '2026-07-01', venue: `Venue ${match}` }
         ]))
     },
+    eliminatedTeams: ['O2'],
     groupSimulation: { A: [selected] },
     bracketForecast: {
         r32: [forecast(1, 10, 0.4, 'Wrong branch'), forecast(2, 11, 0.6, 'Opening opponent')],
@@ -122,6 +123,8 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.match(elements.bracketBoard.innerHTML, /data-team-code="XX"/);
     assert.match(elements.bracketBoard.innerHTML, /has-locked-slot selected/);
     assert.match(elements.bracketBoard.innerHTML, /Starting bracket slot confirmed/);
+    assert.match(elements.bracketBoard.innerHTML, /is-eliminated/);
+    assert.match(elements.bracketBoard.innerHTML, /<strong>OUT<\/strong>/);
     assert.ok(elements.bracketBoard.classList.contains('is-focused'));
     assert.equal(elements.showAllButton.disabled, false);
     assert.match(elements.bracketBoard.innerHTML, /aria-pressed="true"/);
