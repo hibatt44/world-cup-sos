@@ -77,4 +77,41 @@ assert.equal(withEspnPenaltyWinner[0].shootoutScore1, 3);
 assert.equal(withEspnPenaltyWinner[0].shootoutScore2, 4);
 assert.equal(withEspnPenaltyWinner[0].provisional, false);
 
+const swedenEvent = normalizeEspnScoreboard({
+    events: [{
+        id: '760492',
+        name: 'Sweden at France',
+        date: '2026-06-30T21:00Z',
+        competitions: [{
+            status: {
+                type: {
+                    state: 'pre',
+                    completed: false,
+                    detail: 'Tue, June 30th at 5:00 PM EDT'
+                }
+            },
+            competitors: [
+                {
+                    homeAway: 'home',
+                    winner: false,
+                    score: '0',
+                    team: { abbreviation: 'FRA', displayName: 'France' }
+                },
+                {
+                    homeAway: 'away',
+                    winner: false,
+                    score: '0',
+                    team: { abbreviation: 'SWE', displayName: 'Sweden' }
+                }
+            ]
+        }]
+    }]
+})[0];
+
+assert.deepEqual(
+    swedenEvent.competitors.map(team => team.code),
+    ['FR', 'SE'],
+    'ESPN Sweden abbreviation should map to the Elo/bracket Sweden code'
+);
+
 console.log('Knockout penalty tests passed');
