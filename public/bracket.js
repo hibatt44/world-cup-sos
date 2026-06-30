@@ -415,9 +415,17 @@ function scoreTeamRow(team, showScore, event) {
   const value = showScore ? escapeHtml(scoreDisplayValue(team)) : liveScoreAdvanceProbability(team.code, event);
   return `
     <div class="live-score-team ${team.code === state.selectedTeam ? 'is-selected' : ''} ${team.winner ? 'is-winner' : ''}">
-      <span>${escapeHtml(team.shortName || team.name)}</span>
+      <span class="live-score-team-label">
+        <span class="live-score-team-name">${escapeHtml(team.shortName || team.name)}</span>
+        ${scoreTeamEloLabel(team.code)}
+      </span>
       <strong>${value}</strong>
     </div>`;
+}
+
+function scoreTeamEloLabel(code) {
+  const elo = teamElo(code);
+  return elo ? `<small>${escapeHtml(Math.round(elo))} Elo</small>` : '';
 }
 
 function scoreDisplayValue(team) {

@@ -1550,14 +1550,32 @@ select {
   background: var(--green);
 }
 
-.live-score-team span {
+.live-score-team-label {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.live-score-team-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.live-score-team small {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
 .live-score-team strong {
   flex: 0 0 auto;
+}
+
+.live-score-team.is-selected small {
+  color: color-mix(in srgb, #fff 78%, var(--green));
 }
 
 .bracket-stage {
