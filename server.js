@@ -47,6 +47,12 @@ let liveScoresCache = {
     refreshPromise: null
 };
 
+let forecastScoresCache = {
+    data: null,
+    timestamp: 0,
+    refreshPromise: null
+};
+
 const CACHE_TTLS = {
     rankings: 60 * 60 * 1000, // 1 hour
     results: 5 * 60 * 1000,   // 5 minutes during live play
@@ -63,6 +69,7 @@ const CDN_CACHE_SECONDS = {
 };
 const ESPN_WORLD_CUP_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 const LIVE_SCORE_TTL = 15 * 1000;
+const FORECAST_SCORE_TTL = 60 * 1000;
 const LIVE_SCORE_EVENT_LIMIT = 3;
 const LIVE_SCORE_TIME_ZONE = process.env.LIVE_SCORE_TIME_ZONE || 'America/Chicago';
 const ESPN_TO_ELO_CODES = {
@@ -409,7 +416,7 @@ function collectKnockoutResults(groupData, schedule, results, liveScores) {
         if (date < knockoutStart) continue;
         if (!groupLookup[home.code] || !groupLookup[away.code]) continue;
         if (groupLookup[home.code] === groupLookup[away.code]) continue;
-        const winner = scoreWinner(home.code, away.code, home.score, away.score);
+        const winner = eventWinner(event) || scoreWinner(home.code, away.code, home.score, away.score);
         if (!winner) continue;
         collected.push({
             source: 'espn',
@@ -418,6 +425,8 @@ function collectKnockoutResults(groupData, schedule, results, liveScores) {
             team2: away.code,
             score1: home.score,
             score2: away.score,
+            shootoutScore1: home.shootoutScore,
+            shootoutScore2: away.shootoutScore,
             winner,
             provisional: event.status === 'in' && !event.completed,
             espnEventId: event.id,
@@ -432,6 +441,11 @@ function collectKnockoutResults(groupData, schedule, results, liveScores) {
 function scoreWinner(team1, team2, score1, score2) {
     if (!Number.isFinite(score1) || !Number.isFinite(score2) || score1 === score2) return null;
     return score1 > score2 ? team1 : team2;
+}
+
+function eventWinner(event) {
+    const winners = (event?.competitors || []).filter(team => team.winner && team.code);
+    return winners.length === 1 ? winners[0].code : null;
 }
 
 function getCurrentThirdPlaceAssignments(groupData, groupRecords) {
@@ -480,13 +494,17 @@ function eliminatedTeamCodes(completedKnockoutMatches) {
 function liveScoreSimulationSignature(liveScores) {
     const groupLookup = getGroupLookup(worldCupGroups);
     return (liveScores?.events || [])
-        .filter(event => event.status === 'in')
+        .filter(event => event.status === 'in' || event.completed || event.status === 'post')
         .filter(event => event.competitors?.length >= 2)
         .map(event => {
             const [home, away] = event.competitors;
             if (!groupLookup[home.code] || !groupLookup[away.code]) return null;
             const codes = [home.code, away.code].sort();
-            return `${event.id}:${codes.join('-')}:${home.score}-${away.score}:${event.status}`;
+            const resultState = event.competitors
+                .map(team => `${team.code}:${team.score}:${team.shootoutScore ?? ''}:${team.winner ? 'W' : ''}`)
+                .sort()
+                .join(',');
+            return `${event.id}:${codes.join('-')}:${resultState}:${event.status}`;
         })
         .filter(Boolean)
         .sort()
@@ -844,6 +862,33 @@ function espnScoreboardUrl() {
     return url;
 }
 
+function forecastScoreboardUrl() {
+    const { start, end } = forecastScoreboardDateRange();
+    const url = new URL(ESPN_WORLD_CUP_SCOREBOARD);
+    url.searchParams.set('limit', '200');
+    url.searchParams.set('dates', `${start.replaceAll('-', '')}-${end.replaceAll('-', '')}`);
+    return url;
+}
+
+function forecastScoreboardDateRange() {
+    const today = liveScoreDateKey();
+    const tomorrow = dateKeyOffset(today, 1);
+    const knockoutStart = Object.values(worldCupSchedule.knockout || {})
+        .map(match => match.date)
+        .filter(Boolean)
+        .sort()[0] || today;
+    return {
+        start: knockoutStart <= tomorrow ? knockoutStart : today,
+        end: tomorrow
+    };
+}
+
+function dateKeyOffset(dateKey, days) {
+    const date = new Date(`${dateKey}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+}
+
 function liveScoreDateKey(date = new Date()) {
     const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: LIVE_SCORE_TIME_ZONE,
@@ -868,14 +913,19 @@ function normalizeEspnScoreboard(scoreboard) {
         const competition = event.competitions?.[0] || {};
         const status = competition.status || event.status || {};
         const statusType = status.type || {};
-        const competitors = (competition.competitors || []).map(competitor => ({
-            homeAway: competitor.homeAway,
-            score: Number.parseInt(competitor.score, 10) || 0,
-            code: ESPN_TO_ELO_CODES[competitor.team?.abbreviation] || competitor.team?.abbreviation || null,
-            espnCode: competitor.team?.abbreviation || null,
-            name: competitor.team?.displayName || competitor.team?.shortDisplayName || competitor.team?.name || 'TBD',
-            shortName: competitor.team?.shortDisplayName || competitor.team?.displayName || 'TBD'
-        }));
+        const competitors = (competition.competitors || []).map(competitor => {
+            const shootoutScore = Number.parseInt(competitor.shootoutScore, 10);
+            return {
+                homeAway: competitor.homeAway,
+                score: Number.parseInt(competitor.score, 10) || 0,
+                shootoutScore: Number.isFinite(shootoutScore) ? shootoutScore : null,
+                winner: Boolean(competitor.winner),
+                code: ESPN_TO_ELO_CODES[competitor.team?.abbreviation] || competitor.team?.abbreviation || null,
+                espnCode: competitor.team?.abbreviation || null,
+                name: competitor.team?.displayName || competitor.team?.shortDisplayName || competitor.team?.name || 'TBD',
+                shortName: competitor.team?.shortDisplayName || competitor.team?.displayName || 'TBD'
+            };
+        });
 
         return {
             id: event.id,
@@ -1043,11 +1093,51 @@ function scenarioSignature(picks) {
 
 async function getLiveScoresForForecast() {
     try {
-        return await getLiveScores();
+        return await getForecastScores();
     } catch (error) {
         console.error('Live score forecast input unavailable:', error.message);
         return { events: [] };
     }
+}
+
+async function getForecastScores() {
+    const cacheStillFresh = forecastScoresCache.data &&
+        Date.now() - forecastScoresCache.timestamp < FORECAST_SCORE_TTL;
+
+    if (cacheStillFresh) return markForecastScoreCacheState(forecastScoresCache.data);
+    if (forecastScoresCache.refreshPromise) return forecastScoresCache.refreshPromise;
+
+    forecastScoresCache.refreshPromise = (async () => {
+        const response = await fetch(forecastScoreboardUrl());
+        if (!response.ok) throw new Error(`ESPN forecast scoreboard unavailable: ${response.status}`);
+        const scoreboard = await response.json();
+        const payload = {
+            source: 'espn',
+            sourceUrl: ESPN_WORLD_CUP_SCOREBOARD,
+            generatedAt: new Date().toISOString(),
+            events: normalizeEspnScoreboard(scoreboard)
+        };
+
+        forecastScoresCache = {
+            data: payload,
+            timestamp: Date.now(),
+            refreshPromise: null
+        };
+        return markForecastScoreCacheState(payload);
+    })();
+
+    try {
+        return await forecastScoresCache.refreshPromise;
+    } finally {
+        forecastScoresCache.refreshPromise = null;
+    }
+}
+
+function markForecastScoreCacheState(payload) {
+    return {
+        ...payload,
+        cacheAge: Date.now() - forecastScoresCache.timestamp
+    };
 }
 
 async function refreshSosPayload(liveScores = { events: [] }, liveScoreSignature = '') {
@@ -1188,8 +1278,18 @@ app.get('/api/groups', (req, res) => {
     res.json({ ...worldCupGroups, schedule: worldCupSchedule });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`World Cup SoS server running at http://localhost:${PORT}`);
-    console.log('Ready for Railway deployment via dashboard!');
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`World Cup SoS server running at http://localhost:${PORT}`);
+        console.log('Ready for Railway deployment via dashboard!');
+    });
+}
+
+module.exports = {
+    app,
+    collectKnockoutResults,
+    eventWinner,
+    forecastScoreboardDateRange,
+    normalizeEspnScoreboard,
+    scoreWinner
+};

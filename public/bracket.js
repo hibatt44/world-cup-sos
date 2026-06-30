@@ -412,12 +412,16 @@ function liveScoreCard(event) {
 }
 
 function scoreTeamRow(team, showScore, event) {
-  const value = showScore ? escapeHtml(team.score) : liveScoreAdvanceProbability(team.code, event);
+  const value = showScore ? escapeHtml(scoreDisplayValue(team)) : liveScoreAdvanceProbability(team.code, event);
   return `
-    <div class="live-score-team ${team.code === state.selectedTeam ? 'is-selected' : ''}">
+    <div class="live-score-team ${team.code === state.selectedTeam ? 'is-selected' : ''} ${team.winner ? 'is-winner' : ''}">
       <span>${escapeHtml(team.shortName || team.name)}</span>
       <strong>${value}</strong>
     </div>`;
+}
+
+function scoreDisplayValue(team) {
+  return Number.isFinite(team.shootoutScore) ? `${team.score} (${team.shootoutScore})` : team.score;
 }
 
 function liveScoreAdvanceProbability(code, event) {
@@ -445,7 +449,7 @@ function bracketMatchByNumber(matchNumber) {
 
 function scoreStatusLabel(event) {
   if (event.status === 'in') return event.displayClock || event.detail || 'Live';
-  if (event.completed) return 'Final';
+  if (event.completed) return event.detail || 'Final';
   return formatKickoff(event.date);
 }
 

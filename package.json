@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "python3 test_win_probability.py && node test_bracket_simulator.js && node test_bracket_page.js && echo 'Unit tests passed'"
+    "test": "python3 test_win_probability.py && node test_bracket_simulator.js && node test_bracket_page.js && node test_knockout_penalties.js && echo 'Unit tests passed'"
   },
   "dependencies": {
     "express": "^4.18.2"

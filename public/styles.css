@@ -1195,6 +1195,15 @@ select {
   box-shadow: inset 2px 0 var(--green);
 }
 
+.live-score-team.is-winner {
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  box-shadow: inset 2px 0 var(--green);
+}
+
+.live-score-team.is-winner strong {
+  color: var(--green-dark);
+}
+
 .bracket-shell {
   width: min(1500px, calc(100% - 32px));
 }
