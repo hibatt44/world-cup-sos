@@ -1,11 +1,13 @@
-# World Cup 2026 Launch Room
+# World Cup 2026 Knockout Forecast
 
-A live World Cup 2026 dashboard for reading the tournament before kickoff. It keeps the original Elo probability algorithm, but rebuilds the app around a fresh launch-room experience: contenders, group heat, playoff uncertainty, recent Elo movement, and an interactive matchup lab.
+A live World Cup 2026 knockout forecast powered by Elo ratings and 50,000 tournament simulations. The app now leads with the bracket, keeps the completed group stage as an archive, and adds path rankings for hardest routes, easiest routes, dangerous openers, draw value, and bracket tax.
 
 ## Features
 
 - **Live Elo Ratings**: Fetches current team ratings from eloratings.net
-- **Launch Dashboard**: Shows champion contenders, hardest group paths, rest-of-group SoS, and recent results
+- **Knockout Bracket**: Traces each team's most likely route from the round of 32 through the final
+- **Path Rankings**: Compares hardest paths, easiest paths, opening-match danger, draw value, bracket tax, and volatility
+- **Group Archive**: Preserves completed group-stage context that feeds the bracket
 - **Rest-of-Group SoS**: Ranks every team by the average Elo of its three group opponents
 - **Matchup Lab**: Compares any two teams with the existing Elo win/draw/loss formula
 - **Monte Carlo Simulation**: 50,000 bracket-aware tournament runs using the existing tournament model
@@ -76,8 +78,12 @@ soccer_elo/
 ├── data/
 │   └── worldCupGroups.json # Tournament structure
 ├── public/
-│   ├── index.html         # Launch-room frontend shell
-│   ├── app.js             # Dashboard rendering and matchup lab
+│   ├── index.html         # Bracket-first forecast shell
+│   ├── paths.html         # Knockout path rankings
+│   ├── groups.html        # Completed group-stage archive
+│   ├── app.js             # Group archive rendering and matchup lab
+│   ├── bracket.js         # Bracket rendering and team route tracing
+│   ├── paths.js           # Path difficulty rankings
 │   └── styles.css         # Responsive dashboard styling
 ├── test_win_probability.py      # Unit tests for probability formulas
 └── test_server_probabilities.py # Integration tests vs live server

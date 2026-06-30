@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="print">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Cup 2026 Group Archive</title>
+  <meta name="description" content="Completed World Cup 2026 group-stage results and qualification probabilities from Elo simulations.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <main class="shell">
+    <header class="hero" id="top">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand" href="index.html">World Cup Forecast</a>
+        <div class="nav-links">
+          <a href="index.html">Bracket</a>
+          <a href="paths.html">Path rankings</a>
+          <a href="groups.html" aria-current="page">Group archive</a>
+          <a href="methodology.html">Methodology</a>
+        </div>
+        <div class="theme-switcher" aria-label="Choose visual design"></div>
+        <div class="status-pill" id="statusPill">Loading live Elo</div>
+      </nav>
+    </header>
+
+    <section class="section lead-board" id="groupBoard" aria-labelledby="groupBoardTitle">
+      <div class="section-heading split">
+        <div>
+          <p class="eyebrow">Completed group stage</p>
+          <h1 id="groupBoardTitle">How every group landed</h1>
+          <p class="section-note">Final group context sits alongside the simulated qualification paths that fed the knockout bracket.</p>
+        </div>
+        <div class="board-actions">
+          <label class="date-control">
+            Group-stage date
+            <input type="date" id="scheduleDate" min="2026-06-11" max="2026-06-27">
+          </label>
+          <button class="button" id="todayButton" type="button">Final day</button>
+          <a class="button primary" href="index.html">Explore bracket paths</a>
+        </div>
+      </div>
+      <div class="group-board" id="groupBoardGrid" aria-live="polite"></div>
+    </section>
+
+    <section class="hero-grid section" aria-labelledby="pathInspectorTitle">
+        <div class="hero-copy">
+          <p class="eyebrow">Team forecast</p>
+          <h2 id="pathInspectorTitle">Pick a team. See the shape of its tournament.</h2>
+          <p class="lede">The model incorporates completed group results, simulates the remaining matches, ranks the best third-place teams, then plays the knockout bracket with current Elo ratings.</p>
+          <div class="team-spotlight" id="teamSpotlight" aria-live="polite"></div>
+          <div class="hero-actions">
+            <a class="button primary" href="#groups">Inspect a group</a>
+            <a class="button" href="index.html">Open bracket</a>
+          </div>
+        </div>
+
+        <aside class="hero-panel" aria-label="Tournament snapshot">
+          <div>
+            <span class="label">Opening frame</span>
+            <strong id="countdownText">World Cup 2026</strong>
+          </div>
+          <div class="metric-row">
+            <div>
+              <span class="label">Groups</span>
+              <strong id="groupCount">12</strong>
+            </div>
+            <div>
+              <span class="label">Teams</span>
+              <strong id="teamCount">48</strong>
+            </div>
+            <div>
+              <span class="label">Simulations</span>
+              <strong>50k</strong>
+            </div>
+          </div>
+          <p id="lastUpdated">Waiting for live data...</p>
+        </aside>
+    </section>
+
+    <section class="section" aria-labelledby="contendersTitle">
+      <div class="section-heading">
+        <p class="eyebrow">Probability context</p>
+        <h2 id="contendersTitle">Title favorites, for reference</h2>
+      </div>
+      <div class="contender-grid" id="contenderGrid" aria-live="polite"></div>
+    </section>
+
+    <section class="section" id="groups" aria-labelledby="groupsTitle">
+      <div class="section-heading split">
+        <div>
+          <p class="eyebrow">Group outcomes</p>
+          <h2 id="groupsTitle">Finish and qualification probabilities</h2>
+        </div>
+        <select id="groupSelect" aria-label="Choose a group"></select>
+      </div>
+      <div class="group-stage">
+        <div class="group-detail" id="groupDetail"></div>
+        <div class="group-rankings" id="groupRankings"></div>
+      </div>
+    </section>
+
+    <section class="section two-column" aria-labelledby="playoffTitle">
+      <div>
+        <div class="section-heading">
+          <p class="eyebrow">Final field</p>
+          <h2 id="playoffTitle">No placeholders left in the draw</h2>
+        </div>
+        <div class="playoff-list" id="playoffList"></div>
+      </div>
+
+      <div class="match-lab" id="matchLab">
+        <div class="section-heading">
+          <p class="eyebrow">Matchup lab</p>
+          <h2>Compare any two teams</h2>
+        </div>
+        <div class="lab-controls">
+          <label>
+            Team A
+            <select id="teamA"></select>
+          </label>
+          <label>
+            Team B
+            <select id="teamB"></select>
+          </label>
+        </div>
+        <div class="prob-card" id="matchResult"></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="resultsTitle">
+      <div class="section-heading">
+        <p class="eyebrow">Recent movement</p>
+        <h2 id="resultsTitle">Latest Elo-changing matches</h2>
+      </div>
+      <div class="results-strip" id="resultsStrip"></div>
+    </section>
+  </main>
+
+  <script src="theme.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>

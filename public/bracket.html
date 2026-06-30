@@ -13,8 +13,9 @@
       <nav class="topbar" aria-label="Primary">
         <a class="brand" href="index.html">World Cup Forecast</a>
         <div class="nav-links">
-          <a href="index.html">Group forecast</a>
-          <a href="bracket.html" aria-current="page">Bracket paths</a>
+          <a href="index.html" aria-current="page">Bracket</a>
+          <a href="paths.html">Path rankings</a>
+          <a href="groups.html">Group archive</a>
           <a href="methodology.html">Methodology</a>
         </div>
         <div class="theme-switcher" aria-label="Choose visual design"></div>
@@ -25,10 +26,12 @@
     <section class="bracket-toolbar" aria-labelledby="bracketTitle">
       <div class="bracket-toolbar-title">
         <p class="eyebrow">World Cup 2026 knockout bracket</p>
-        <h1 id="bracketTitle">Bracket paths</h1>
+        <h1 id="bracketTitle">Knockout bracket</h1>
       </div>
       <div class="bracket-toolbar-copy">
         <strong>Click any team to trace its route.</strong>
+        <a class="button" href="paths.html">Rank every path</a>
+        <div class="scenario-control-strip" id="scenarioControls" aria-live="polite"></div>
       </div>
       <div class="bracket-team-search">
         <label for="bracketTeamSearch">Selected team</label>
@@ -47,7 +50,7 @@
 
     <section class="live-score-strip" id="liveScoreStrip" aria-live="polite"></section>
     <section class="path-summary" id="pathSummary" aria-live="polite"></section>
-    <section class="bracket-tracker" id="bracketTracker" aria-live="polite"></section>
+    <section class="scenario-mode-banner" id="scenarioBanner" aria-live="polite" hidden></section>
 
     <section class="section bracket-stage" aria-label="Projected bracket from round of 32 to final">
       <div class="bracket-scroll">

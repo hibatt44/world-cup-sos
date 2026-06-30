@@ -27,7 +27,8 @@ let monteCarloCache = {
     data: null,
     rankingsTimestamp: 0,
     resultsTimestamp: 0,
-    liveScoreSignature: ''
+    liveScoreSignature: '',
+    knockoutSignature: ''
 };
 
 let sosResponseCache = {
@@ -35,6 +36,7 @@ let sosResponseCache = {
     rankingsTimestamp: 0,
     resultsTimestamp: 0,
     liveScoreSignature: '',
+    knockoutSignature: '',
     generatedAt: 0,
     refreshPromise: null
 };
@@ -314,6 +316,165 @@ function resultMatchKey(team1, team2) {
     return [team1, team2].sort().join('-');
 }
 
+function getCompletedKnockoutMatches(groupData, schedule, groupRecords, results, liveScores) {
+    if (!allGroupsComplete(groupRecords)) return {};
+
+    const knockoutResults = collectKnockoutResults(groupData, schedule, results, liveScores);
+    const resultByTeams = new Map();
+    for (const result of knockoutResults) {
+        const key = resultMatchKey(result.team1, result.team2);
+        const previous = resultByTeams.get(key);
+        if (!previous || (previous.provisional && !result.provisional)) {
+            resultByTeams.set(key, result);
+        }
+    }
+
+    const completed = {};
+    const winnersByMatch = {};
+    const recordsByCode = Object.fromEntries(Object.values(groupRecords).flat().map(record => [record.code, record]));
+    const thirdPlaceAssignments = getCurrentThirdPlaceAssignments(groupData, groupRecords);
+    const rounds = [
+        ['r32', 'r16Count'],
+        ['r16', 'qfCount'],
+        ['qf', 'sfCount'],
+        ['sf', 'finalCount'],
+        ['final', 'winCount']
+    ];
+
+    for (const [round] of rounds) {
+        for (const match of groupData.knockout[round] || []) {
+            const teams = round === 'r32'
+                ? resolveR32Teams(match, groupRecords, thirdPlaceAssignments)
+                : (match.prevMatches || []).map(prevMatch => winnersByMatch[prevMatch]).filter(Boolean);
+            if (teams.length !== 2) continue;
+
+            const result = resultByTeams.get(resultMatchKey(teams[0].code, teams[1].code));
+            if (!result?.winner || !teams.some(team => team.code === result.winner)) continue;
+
+            const loser = teams.find(team => team.code !== result.winner)?.code;
+            completed[match.match] = {
+                ...result,
+                match: match.match,
+                officialMatch: schedule.knockout?.[match.match]?.officialMatch || null,
+                round,
+                team1: teams[0].code,
+                team2: teams[1].code,
+                winner: result.winner,
+                loser
+            };
+            winnersByMatch[match.match] = recordsByCode[result.winner] || teams.find(team => team.code === result.winner);
+        }
+    }
+
+    return completed;
+}
+
+function allGroupsComplete(groupRecords) {
+    return Object.values(groupRecords || {}).every(group => group.every(team => team.played >= 3));
+}
+
+function collectKnockoutResults(groupData, schedule, results, liveScores) {
+    const groupLookup = getGroupLookup(groupData);
+    const knockoutStart = Object.values(schedule.knockout || {})
+        .map(match => match.date)
+        .filter(Boolean)
+        .sort()[0] || '9999-12-31';
+    const collected = [];
+
+    for (const result of results || []) {
+        if (result.tournament !== 'WC' || result.date < knockoutStart) continue;
+        if (!groupLookup[result.team1] || !groupLookup[result.team2]) continue;
+        if (isWorldCupGroupResult(result, groupLookup)) continue;
+        const winner = scoreWinner(result.team1, result.team2, result.score1, result.score2);
+        if (!winner) continue;
+        collected.push({
+            source: 'eloratings',
+            date: result.date,
+            team1: result.team1,
+            team2: result.team2,
+            score1: result.score1,
+            score2: result.score2,
+            winner,
+            provisional: false
+        });
+    }
+
+    for (const event of liveScores?.events || []) {
+        if (!['in', 'post'].includes(event.status) && !event.completed) continue;
+        if (!event.competitors || event.competitors.length < 2) continue;
+        const [home, away] = event.competitors;
+        const date = event.date?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+        if (date < knockoutStart) continue;
+        if (!groupLookup[home.code] || !groupLookup[away.code]) continue;
+        if (groupLookup[home.code] === groupLookup[away.code]) continue;
+        const winner = scoreWinner(home.code, away.code, home.score, away.score);
+        if (!winner) continue;
+        collected.push({
+            source: 'espn',
+            date,
+            team1: home.code,
+            team2: away.code,
+            score1: home.score,
+            score2: away.score,
+            winner,
+            provisional: event.status === 'in' && !event.completed,
+            espnEventId: event.id,
+            status: event.status,
+            displayClock: event.displayClock
+        });
+    }
+
+    return collected;
+}
+
+function scoreWinner(team1, team2, score1, score2) {
+    if (!Number.isFinite(score1) || !Number.isFinite(score2) || score1 === score2) return null;
+    return score1 > score2 ? team1 : team2;
+}
+
+function getCurrentThirdPlaceAssignments(groupData, groupRecords) {
+    const thirdPlaceTeams = Object.entries(groupRecords)
+        .map(([group, records]) => ({ ...records[2], group }))
+        .filter(team => team?.code)
+        .sort((a, b) => {
+            if (b.points !== a.points) return b.points - a.points;
+            if (b.gd !== a.gd) return b.gd - a.gd;
+            if (b.gf !== a.gf) return b.gf - a.gf;
+            return b.elo - a.elo;
+        })
+        .slice(0, 8);
+
+    return bracketSimulator.assignThirdPlaceTeams(groupData.knockout.r32, thirdPlaceTeams);
+}
+
+function resolveR32Teams(match, groupRecords, thirdPlaceAssignments) {
+    return [resolveR32Slot(match.team1, groupRecords, thirdPlaceAssignments, match.match), resolveR32Slot(match.team2, groupRecords, thirdPlaceAssignments, match.match)]
+        .filter(Boolean);
+}
+
+function resolveR32Slot(slot, groupRecords, thirdPlaceAssignments, matchNumber) {
+    const parsed = parseBracketSlot(slot);
+    if (parsed.pos === 1 || parsed.pos === 2) return groupRecords[parsed.group]?.[parsed.pos - 1] || null;
+    if (parsed.pos === 3) return thirdPlaceAssignments[matchNumber] || null;
+    return null;
+}
+
+function parseBracketSlot(slot) {
+    if (String(slot).startsWith('3')) return { pos: 3, pool: String(slot).slice(1).split('') };
+    return { pos: Number(String(slot)[0]), group: String(slot)[1] };
+}
+
+function knockoutSignature(matches) {
+    return Object.values(matches || {})
+        .sort((a, b) => a.match - b.match)
+        .map(match => `${match.match}:${match.team1}-${match.team2}:${match.score1}-${match.score2}:${match.winner}:${match.provisional ? 'live' : 'final'}`)
+        .join('|');
+}
+
+function eliminatedTeamCodes(completedKnockoutMatches) {
+    return [...new Set(Object.values(completedKnockoutMatches || {}).map(match => match.loser).filter(Boolean))];
+}
+
 function liveScoreSimulationSignature(liveScores) {
     const groupLookup = getGroupLookup(worldCupGroups);
     return (liveScores?.events || [])
@@ -321,7 +482,7 @@ function liveScoreSimulationSignature(liveScores) {
         .filter(event => event.competitors?.length >= 2)
         .map(event => {
             const [home, away] = event.competitors;
-            if (!groupLookup[home.code] || groupLookup[home.code] !== groupLookup[away.code]) return null;
+            if (!groupLookup[home.code] || !groupLookup[away.code]) return null;
             const codes = [home.code, away.code].sort();
             return `${event.id}:${codes.join('-')}:${home.score}-${away.score}:${event.status}`;
         })
@@ -440,6 +601,7 @@ function hydrateSosCacheFromDisk() {
         sosResponseCache.rankingsTimestamp = payload.cacheMeta?.rankingsTimestamp || 0;
         sosResponseCache.resultsTimestamp = payload.cacheMeta?.resultsTimestamp || 0;
         sosResponseCache.liveScoreSignature = payload.liveProjection?.signature || '';
+        sosResponseCache.knockoutSignature = payload.knockoutState?.signature || '';
         sosResponseCache.generatedAt = payload.lastUpdated ? new Date(payload.lastUpdated).getTime() : Date.now();
         monteCarloCache.data = {
             groupSimulation: payload.groupSimulation,
@@ -449,6 +611,7 @@ function hydrateSosCacheFromDisk() {
         monteCarloCache.rankingsTimestamp = sosResponseCache.rankingsTimestamp;
         monteCarloCache.resultsTimestamp = sosResponseCache.resultsTimestamp;
         monteCarloCache.liveScoreSignature = sosResponseCache.liveScoreSignature;
+        monteCarloCache.knockoutSignature = sosResponseCache.knockoutSignature;
         console.log(`Loaded cached SOS forecast from ${SOS_CACHE_FILE}`);
     } catch (error) {
         if (error.code !== 'ENOENT') console.error('Could not load cached SOS forecast:', error.message);
@@ -608,7 +771,10 @@ app.get('/api/live-scores', async (req, res) => {
 
 app.get('/api/sos', async (req, res) => {
     try {
-        const sos = await getSosPayload();
+        const scenarioPicks = parseScenarioQuery(req.query.scenario);
+        const sos = scenarioPicks.length
+            ? await getScenarioSosPayload(scenarioPicks)
+            : await getSosPayload();
         setPublicCacheHeaders(res, CDN_CACHE_SECONDS.sos);
         res.json(sos);
     } catch (error) {
@@ -619,6 +785,21 @@ app.get('/api/sos', async (req, res) => {
         });
     }
 });
+
+function parseScenarioQuery(value) {
+    if (!value) return [];
+    return String(value)
+        .split(',')
+        .map(item => {
+            const [match, winner] = item.split(':');
+            const matchNumber = Number(match);
+            const winnerCode = String(winner || '').toUpperCase();
+            return Number.isFinite(matchNumber) && winnerCode
+                ? { match: matchNumber, winner: winnerCode }
+                : null;
+        })
+        .filter(Boolean);
+}
 
 async function getLiveScores() {
     const cacheStillFresh = liveScoresCache.data &&
@@ -715,13 +896,15 @@ async function getSosPayload() {
     const liveScores = await getLiveScoresForForecast();
     const liveScoreSignature = liveScoreSimulationSignature(liveScores);
     const liveScoreChanged = sosResponseCache.liveScoreSignature !== liveScoreSignature;
+    const cacheCompatible = Boolean(sosResponseCache.data?.knockoutState);
     const cacheStillFresh = sosResponseCache.data &&
+        cacheCompatible &&
         Date.now() - sosResponseCache.generatedAt < CACHE_TTLS.results &&
         !liveScoreChanged;
 
     if (cacheStillFresh) return decorateSosPayload(sosResponseCache.data, false);
 
-    if (sosResponseCache.data && !liveScoreChanged) {
+    if (sosResponseCache.data && cacheCompatible && !liveScoreChanged) {
         refreshSosPayload(liveScores, liveScoreSignature).catch(error => {
             console.error('Background /api/sos refresh failed:', error);
         });
@@ -729,6 +912,119 @@ async function getSosPayload() {
     }
 
     return refreshSosPayload(liveScores, liveScoreSignature);
+}
+
+async function getScenarioSosPayload(scenarioPicks) {
+    const liveScores = await getLiveScoresForForecast();
+    const liveScoreSignature = liveScoreSimulationSignature(liveScores);
+    const [rankings, teams, results] = await Promise.all([
+        getCachedData('rankings', 'World.tsv', parseRankings),
+        getCachedData('teams', 'en.teams.tsv', parseTeams),
+        getCachedData('results', 'latest.tsv', parseResults)
+    ]);
+
+    const sosData = sosCalculator.calculateAllSoS(worldCupGroups, rankings.map);
+    const playoffSim = sosCalculator.simulatePlayoffSoS(worldCupGroups, rankings.map);
+    const confirmedGroupMatches = getCompletedGroupMatches(worldCupGroups, results);
+    const { completedGroupMatches, provisionalMatches } = mergeLiveGroupMatches(
+        confirmedGroupMatches,
+        liveScores,
+        worldCupGroups
+    );
+    const groupRecords = calculateGroupRecords(worldCupGroups, completedGroupMatches, rankings.map, teams);
+    const realKnockoutMatches = getCompletedKnockoutMatches(
+        worldCupGroups,
+        worldCupSchedule,
+        groupRecords,
+        results,
+        liveScores
+    );
+    const scenarioMatches = scenarioPicksToKnockoutMatches(scenarioPicks, realKnockoutMatches);
+    const completedKnockoutMatches = {
+        ...realKnockoutMatches,
+        ...scenarioMatches
+    };
+    const simulation = bracketSimulator.simulateTournament(
+        worldCupGroups,
+        rankings.map,
+        sosData.expectedElos,
+        teams,
+        50000,
+        completedGroupMatches,
+        completedKnockoutMatches
+    );
+
+    sosData.teams = sosData.teams.map(t => ({
+        ...t,
+        name: teams[t.code] || t.code
+    }));
+
+    for (const bracket of Object.values(playoffSim.intercontinental || {})) {
+        bracket.teams = bracket.teams.map(t => ({
+            ...t,
+            name: teams[t.code] || t.code
+        }));
+    }
+    for (const path of Object.values(playoffSim.uefa || {})) {
+        path.teams = path.teams.map(t => ({
+            ...t,
+            name: teams[t.code] || t.code
+        }));
+    }
+
+    const signature = knockoutSignature(completedKnockoutMatches);
+    return decorateSosPayload({
+        ...sosData,
+        worldCupGroups,
+        worldCupSchedule,
+        playoffSimulation: playoffSim,
+        groupSimulation: simulation.groupSimulation,
+        bracketForecast: simulation.bracketForecast,
+        simulationCount: simulation.simulations,
+        groupRecords,
+        completedGroupMatches,
+        completedKnockoutMatches,
+        eliminatedTeams: eliminatedTeamCodes(completedKnockoutMatches),
+        knockoutState: {
+            active: Object.keys(completedKnockoutMatches).length > 0,
+            hasLiveProjection: Object.values(completedKnockoutMatches).some(match => match.provisional),
+            signature
+        },
+        scenarioState: {
+            active: scenarioPicks.length > 0,
+            picks: scenarioPicks,
+            signature: scenarioSignature(scenarioPicks)
+        },
+        liveProjection: {
+            active: provisionalMatches.some(match => match.provisional),
+            signature: liveScoreSignature,
+            matches: provisionalMatches
+        },
+        cacheMeta: {
+            rankingsTimestamp: cache.rankings.timestamp,
+            resultsTimestamp: cache.results.timestamp
+        },
+        cacheAge: Date.now() - Math.min(cache.rankings.timestamp, cache.results.timestamp),
+        lastUpdated: new Date().toISOString()
+    }, false);
+}
+
+function scenarioPicksToKnockoutMatches(picks, realKnockoutMatches = {}) {
+    return Object.fromEntries(picks
+        .filter(pick => !realKnockoutMatches[pick.match])
+        .map(pick => [pick.match, {
+            match: pick.match,
+            winner: pick.winner,
+            source: 'scenario',
+            scenario: true
+        }]));
+}
+
+function scenarioSignature(picks) {
+    return picks
+        .map(pick => `${pick.match}:${pick.winner}`)
+        .sort()
+        .join('|');
 }
 
 async function getLiveScoresForForecast() {
@@ -759,15 +1055,27 @@ async function refreshSosPayload(liveScores = { events: [] }, liveScoreSignature
             worldCupGroups
         );
         const groupRecords = calculateGroupRecords(worldCupGroups, completedGroupMatches, rankings.map, teams);
+        const completedKnockoutMatches = getCompletedKnockoutMatches(
+            worldCupGroups,
+            worldCupSchedule,
+            groupRecords,
+            results,
+            liveScores
+        );
+        const completedKnockoutSignature = knockoutSignature(completedKnockoutMatches);
 
         // Run bracket-aware tournament simulation only if rankings or group results have changed.
         if (
             monteCarloCache.rankingsTimestamp !== cache.rankings.timestamp ||
             monteCarloCache.resultsTimestamp !== cache.results.timestamp ||
-            monteCarloCache.liveScoreSignature !== liveScoreSignature
+            monteCarloCache.liveScoreSignature !== liveScoreSignature ||
+            monteCarloCache.knockoutSignature !== completedKnockoutSignature
         ) {
+            const hasLiveKnockoutProjection = Object.values(completedKnockoutMatches).some(match => match.provisional);
             const liveLabel = provisionalMatches.length
-                ? ` with live score projection ${liveScoreSignature}`
+                ? ` with live group score projection ${liveScoreSignature}`
+                : hasLiveKnockoutProjection
+                ? ` with live knockout projection ${completedKnockoutSignature}`
                 : '';
             console.log(`Running bracket-aware tournament simulation (50,000 iterations)${liveLabel}...`);
             const startTime = Date.now();
@@ -777,11 +1085,13 @@ async function refreshSosPayload(liveScores = { events: [] }, liveScoreSignature
                 sosData.expectedElos,
                 teams,
                 50000,
-                completedGroupMatches
+                completedGroupMatches,
+                completedKnockoutMatches
             );
             monteCarloCache.rankingsTimestamp = cache.rankings.timestamp;
             monteCarloCache.resultsTimestamp = cache.results.timestamp;
             monteCarloCache.liveScoreSignature = liveScoreSignature;
+            monteCarloCache.knockoutSignature = completedKnockoutSignature;
             console.log(`Tournament simulation completed in ${Date.now() - startTime}ms`);
         }
 
@@ -813,6 +1123,13 @@ async function refreshSosPayload(liveScores = { events: [] }, liveScoreSignature
             simulationCount: monteCarloCache.data.simulations,
             groupRecords,
             completedGroupMatches,
+            completedKnockoutMatches,
+            eliminatedTeams: eliminatedTeamCodes(completedKnockoutMatches),
+            knockoutState: {
+                active: Object.keys(completedKnockoutMatches).length > 0,
+                hasLiveProjection: Object.values(completedKnockoutMatches).some(match => match.provisional),
+                signature: completedKnockoutSignature
+            },
             liveProjection: {
                 active: provisionalMatches.some(match => match.provisional),
                 signature: liveScoreSignature,
@@ -830,6 +1147,7 @@ async function refreshSosPayload(liveScores = { events: [] }, liveScoreSignature
         sosResponseCache.rankingsTimestamp = cache.rankings.timestamp;
         sosResponseCache.resultsTimestamp = cache.results.timestamp;
         sosResponseCache.liveScoreSignature = liveScoreSignature;
+        sosResponseCache.knockoutSignature = completedKnockoutSignature;
         sosResponseCache.generatedAt = Date.now();
         persistSosPayload(payload);
         return decorateSosPayload(payload, false);

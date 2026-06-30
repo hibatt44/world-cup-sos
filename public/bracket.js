@@ -3,6 +3,9 @@ const state = {
   liveScores: null,
   teams: [],
   lockedTeams: new Set(),
+  eliminatedTeams: new Set(),
+  scenarioPicks: new Map(),
+  scenarioMode: false,
   selectedTeam: 'US',
   focused: true
 };
@@ -33,8 +36,9 @@ const els = {
   search: document.querySelector('#bracketTeamSearch'),
   searchResults: document.querySelector('#bracketTeamResults'),
   liveScores: document.querySelector('#liveScoreStrip'),
+  scenarioControls: document.querySelector('#scenarioControls'),
+  scenarioBanner: document.querySelector('#scenarioBanner'),
   summary: document.querySelector('#pathSummary'),
-  tracker: document.querySelector('#bracketTracker'),
   board: document.querySelector('#bracketBoard'),
   focus: document.querySelector('#showAllButton')
 };
@@ -43,14 +47,15 @@ init();
 
 async function init() {
   try {
-    const response = await fetch('/api/sos');
-    if (!response.ok) throw new Error('Could not load tournament simulations');
-    state.data = await response.json();
-    assertCompatibleForecast(state.data);
-    state.teams = Object.values(state.data.groupSimulation || {}).flat()
-      .sort((a, b) => a.name.localeCompare(b.name));
-    state.lockedTeams = lockedStartingTeams(state.data.bracketForecast?.r32 || []);
-    state.selectedTeam = state.teams.some(team => team.code === 'US') ? 'US' : state.teams[0]?.code || null;
+    await loadForecast();
+    restoreScenarioPicks();
+    if (state.scenarioPicks.size) await loadForecast();
+    const requestedTeam = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('team')?.toUpperCase()
+      : null;
+    state.selectedTeam = state.teams.some(team => team.code === requestedTeam)
+      ? requestedTeam
+      : state.teams.some(team => team.code === 'US') ? 'US' : state.teams[0]?.code || null;
     state.focused = Boolean(state.selectedTeam);
     setupInteractions();
     render();
@@ -64,6 +69,33 @@ async function init() {
     els.status.textContent = 'Simulation unavailable';
     els.board.replaceChildren(createMessage(error.message));
   }
+}
+
+async function loadForecast() {
+  const response = await fetch(forecastUrl());
+  if (!response.ok) throw new Error('Could not load tournament simulations');
+  applyForecast(await response.json());
+}
+
+function applyForecast(data) {
+  state.data = data;
+  assertCompatibleForecast(state.data);
+  state.teams = Object.values(state.data.groupSimulation || {}).flat()
+    .sort((a, b) => a.name.localeCompare(b.name));
+  state.lockedTeams = lockedStartingTeams(state.data.bracketForecast?.r32 || []);
+  state.eliminatedTeams = new Set(state.data.eliminatedTeams || []);
+}
+
+function forecastUrl() {
+  const picks = scenarioQuery();
+  return picks ? `/api/sos?scenario=${encodeURIComponent(picks)}` : '/api/sos';
+}
+
+function scenarioQuery() {
+  return [...state.scenarioPicks.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([match, code]) => `${match}:${code}`)
+    .join(',');
 }
 
 function lockedStartingTeams(matches) {
@@ -122,15 +154,122 @@ function setupInteractions() {
   els.board.addEventListener('click', event => {
     const teamButton = event.target.closest?.('[data-team-code]');
     if (!teamButton) return;
+    if (state.scenarioMode) {
+      toggleScenarioPick(Number(teamButton.dataset.match), teamButton.dataset.teamCode);
+      return;
+    }
     selectTeam(teamButton.dataset.teamCode);
   });
+  els.scenarioControls?.addEventListener('click', handleScenarioControlClick);
+  els.scenarioBanner?.addEventListener('click', handleScenarioControlClick);
   if (typeof window !== 'undefined') window.addEventListener('resize', scheduleConnectorDraw);
+}
+
+function handleScenarioControlClick(event) {
+    const modeButton = event.target.closest?.('[data-scenario-mode]');
+    if (modeButton) {
+      state.scenarioMode = !state.scenarioMode;
+      render();
+      return;
+    }
+    const resetButton = event.target.closest?.('[data-scenario-reset]');
+    if (resetButton) {
+      state.scenarioPicks.clear();
+      persistScenarioPicks();
+      refreshScenarioForecast();
+      return;
+    }
+    const clearButton = event.target.closest?.('[data-scenario-clear]');
+    if (clearButton) {
+      state.scenarioPicks.delete(Number(clearButton.dataset.scenarioClear));
+      persistScenarioPicks();
+      refreshScenarioForecast();
+    }
 }
 
 function selectTeam(code) {
   state.selectedTeam = code;
   state.focused = true;
   render();
+}
+
+function toggleScenarioPick(match, code) {
+  if (!match || !code) return;
+  if (state.scenarioPicks.get(match) === code) {
+    state.scenarioPicks.delete(match);
+  } else {
+    backfillScenarioPath(match, code);
+    state.scenarioPicks.set(match, code);
+  }
+  persistScenarioPicks();
+  refreshScenarioForecast();
+}
+
+function backfillScenarioPath(matchNumber, code) {
+  for (const upstreamMatch of upstreamMatchesForTeam(matchNumber, code)) {
+    if (!state.scenarioPicks.has(upstreamMatch.match)) {
+      state.scenarioPicks.set(upstreamMatch.match, code);
+    }
+  }
+}
+
+function upstreamMatchesForTeam(matchNumber, code) {
+  const match = findForecastMatch(matchNumber);
+  if (!match?.prevMatches?.length) return [];
+
+  const branch = match.prevMatches
+    .map(findForecastMatch)
+    .filter(Boolean)
+    .filter(candidate => contenderProbability(candidate, code) > 0)
+    .sort((a, b) => contenderProbability(b, code) - contenderProbability(a, code))[0];
+
+  return branch ? [...upstreamMatchesForTeam(branch.match, code), branch] : [];
+}
+
+function findForecastMatch(matchNumber) {
+  return rounds
+    .flatMap(([round]) => state.data.bracketForecast?.[round] || [])
+    .find(match => match.match === Number(matchNumber));
+}
+
+async function refreshScenarioForecast() {
+  els.status.textContent = state.scenarioPicks.size ? 'Running scenario' : 'Loading simulations';
+  try {
+    await loadForecast();
+    render();
+    els.status.textContent = state.scenarioPicks.size
+      ? `${Number(state.data.simulationCount || 50000).toLocaleString()} scenario simulations`
+      : `${Number(state.data.simulationCount || 50000).toLocaleString()} simulations loaded`;
+    els.status.classList.add('is-live');
+  } catch (error) {
+    console.error(error);
+    els.status.textContent = 'Scenario unavailable';
+  }
+}
+
+function persistScenarioPicks() {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem('worldCupScenarioPicks', JSON.stringify([...state.scenarioPicks.entries()]));
+}
+
+function restoreScenarioPicks() {
+  if (typeof window === 'undefined') return;
+  try {
+    state.scenarioPicks = new Map(JSON.parse(window.localStorage.getItem('worldCupScenarioPicks') || '[]')
+      .map(([match, code]) => [Number(match), code]));
+  } catch {
+    state.scenarioPicks = new Map();
+  }
+}
+
+function scenarioPickList() {
+  return [...state.scenarioPicks.entries()]
+    .map(([match, code]) => ({ match, code, name: teamName(code) }))
+    .sort((a, b) => a.match - b.match);
+}
+
+function teamName(code) {
+  return state.teams.find(team => team.code === code)?.name || code;
 }
 
 function filteredTeams(query) {
@@ -163,9 +302,50 @@ function render() {
   syncSelectedTeamControl();
   syncViewToggle();
   renderLiveScores();
+  renderScenarioControls();
+  renderScenarioBanner();
   renderSummary();
-  renderTracker();
   renderBracket();
+}
+
+function renderScenarioControls() {
+  if (!els.scenarioControls) return;
+  els.scenarioControls.classList.toggle('is-active', state.scenarioMode);
+  els.scenarioControls.innerHTML = `
+    <button class="scenario-mode-button ${state.scenarioMode ? 'is-active' : ''}" type="button" data-scenario-mode>
+      ${state.scenarioMode ? 'Scenario editing' : 'Scenario'}
+    </button>`;
+}
+
+function renderScenarioBanner() {
+  if (!els.scenarioBanner) return;
+  const picks = scenarioPickList();
+  const visible = state.scenarioMode || picks.length;
+  els.scenarioBanner.hidden = !visible;
+  if (!visible) {
+    els.scenarioBanner.innerHTML = '';
+    return;
+  }
+
+  els.scenarioBanner.innerHTML = `
+    <div class="scenario-banner-copy">
+      <strong>${state.scenarioMode ? 'Scenario editing' : 'Scenario picks applied'}</strong>
+      <span>${state.scenarioMode ? 'Click a team in the bracket to force it through.' : 'Reopen scenario editing to change picks.'}</span>
+    </div>
+    <div class="scenario-control-actions">
+      <button class="scenario-mode-button ${state.scenarioMode ? 'is-active' : ''}" type="button" data-scenario-mode>
+        ${state.scenarioMode ? 'Done' : 'Edit'}
+      </button>
+      ${picks.length ? '<button class="scenario-reset-button" type="button" data-scenario-reset>Reset</button>' : ''}
+    </div>
+    <div class="scenario-pick-strip" ${picks.length ? '' : 'hidden'}>
+      ${picks.length ? picks.map(pick => `
+        <button type="button" data-scenario-clear="${escapeHtml(pick.match)}" title="Remove scenario pick">
+          <span>Match ${escapeHtml(pick.match)}</span>
+          <strong>${escapeHtml(pick.name)}</strong>
+        </button>
+      `).join('') : ''}
+    </div>`;
 }
 
 async function loadLiveScores() {
@@ -272,6 +452,7 @@ function syncViewToggle() {
 
 function renderSummary() {
   const team = state.teams.find(candidate => candidate.code === state.selectedTeam);
+  const eliminated = team && state.eliminatedTeams.has(team.code);
   els.summary.classList.toggle('is-empty', !team);
   if (!team) {
     els.summary.innerHTML = `
@@ -292,7 +473,7 @@ function renderSummary() {
     <div class="path-summary-copy">
       <span class="label">Selected team</span>
       <strong>${flagEmoji(team.code) ? `<span class="selected-team-flag">${escapeHtml(flagEmoji(team.code))}</span>` : ''}${escapeHtml(team.name)}</strong>
-      <small>${escapeHtml(team.elo)} Elo${deltaLabel() ? ` · ${escapeHtml(deltaLabel())}` : ''}</small>
+      <small>${escapeHtml(team.elo)} Elo${eliminated ? ' · Eliminated' : deltaLabel() ? ` · ${escapeHtml(deltaLabel())}` : ''}</small>
     </div>
     <div class="path-odds-chart" aria-label="Selected team odds">
       ${stages.map(([label, value, key]) => oddsChartItem(label, value, deltaBadge(team.code, key))).join('')}
@@ -303,22 +484,6 @@ function renderSummary() {
         ${routeOpponentItems(team.code, path)}
       </div>
     </div>`;
-}
-
-function renderTracker() {
-  if (!els.tracker) return;
-  const team = selectedTeam();
-  els.tracker.classList.toggle('is-empty', !team);
-  if (!team) {
-    els.tracker.innerHTML = `
-      <div class="tracker-empty">
-        <strong>No team selected</strong>
-        <span>Select a team to see its next match, most likely opponents, and probability movement.</span>
-      </div>`;
-    return;
-  }
-
-  els.tracker.innerHTML = '';
 }
 
 function likelyPathSentence(team) {
@@ -446,13 +611,14 @@ function orderMatches(round, matches) {
 
 function matchCard(match, pathMatchNumber, index, matchCount) {
   const selected = match.contenders.find(team => team.code === state.selectedTeam);
+  const scenarioPick = state.scenarioPicks.get(match.match);
   const onPath = Boolean(selected && pathMatchNumber === match.match);
   const hidden = state.focused && !onPath;
   const schedule = state.data.worldCupSchedule?.knockout?.[match.match];
   const rowSpan = 32 / matchCount;
   const rowStart = index * rowSpan + 1;
   return `
-    <article class="bracket-match ${onPath ? 'on-path' : ''} ${hidden ? 'off-path' : ''}"
+    <article class="bracket-match ${onPath ? 'on-path' : ''} ${hidden ? 'off-path' : ''} ${match.completed ? 'is-completed' : ''} ${scenarioPick ? 'has-scenario-pick' : ''}"
       data-match="${escapeHtml(match.match)}" style="--bracket-start:${rowStart};--bracket-span:${rowSpan}">
       <header class="match-heading">
         <div>
@@ -461,15 +627,15 @@ function matchCard(match, pathMatchNumber, index, matchCount) {
             : `<span>Match date TBD</span>`}
           <small>${schedule?.officialMatch ? `FIFA match ${escapeHtml(schedule.officialMatch)}` : `Match ${escapeHtml(match.match)}`}</small>
         </div>
-        <strong>${escapeHtml(schedule?.venue || 'Venue TBD')}</strong>
+        <strong>${scenarioPick ? 'Scenario pick' : escapeHtml(schedule?.venue || 'Venue TBD')}</strong>
       </header>
       <div class="match-slots">
-        ${(match.slots || []).map(slot => slotCard(slot)).join('')}
+        ${(match.slots || []).map(slot => slotCard(slot, match.match, scenarioPick)).join('')}
       </div>
     </article>`;
 }
 
-function slotCard(slot) {
+function slotCard(slot, matchNumber, scenarioPick) {
   const confirmed = slot.contenders.length === 1 && slot.contenders[0].probability >= 0.999;
   const selected = slot.contenders.find(team => team.code === state.selectedTeam);
   const visible = slot.contenders.slice(0, selected && !slot.contenders.slice(0, 3).some(team => team.code === selected.code) ? 2 : 3);
@@ -482,14 +648,38 @@ function slotCard(slot) {
       </header>
       <div class="slot-contenders">
         ${visible.map(team => `
-          <button class="bracket-team ${state.lockedTeams.has(team.code) ? 'has-locked-slot' : ''} ${team.code === state.selectedTeam ? 'selected' : ''}" type="button"
-            data-team-code="${escapeHtml(team.code)}" aria-pressed="${team.code === state.selectedTeam}"
+          <button class="${teamButtonClasses(team, scenarioPick)}" type="button"
+            data-team-code="${escapeHtml(team.code)}" data-match="${escapeHtml(matchNumber)}" aria-pressed="${team.code === state.selectedTeam}"
             ${state.lockedTeams.has(team.code) ? 'title="Starting bracket slot confirmed"' : ''}>
             <span>${escapeHtml(team.name)}</span>
-            ${confirmed ? '<strong>IN</strong>' : `<strong>${percent(team.probability)}</strong>`}
+            ${teamStatusLabel(team, confirmed, scenarioPick)}
           </button>`).join('')}
       </div>
     </section>`;
+}
+
+function teamButtonClasses(team, scenarioPick) {
+  return [
+    'bracket-team',
+    state.lockedTeams.has(team.code) ? 'has-locked-slot' : '',
+    team.code === state.selectedTeam ? 'selected' : '',
+    state.eliminatedTeams.has(team.code) ? 'is-eliminated' : '',
+    scenarioTeamClasses(team, scenarioPick)
+  ].filter(Boolean).join(' ');
+}
+
+function scenarioTeamClasses(team, scenarioPick) {
+  if (!scenarioPick) return '';
+  if (scenarioPick === team.code) return 'is-scenario-winner';
+  return 'is-scenario-out';
+}
+
+function teamStatusLabel(team, confirmed, scenarioPick) {
+  if (scenarioPick === team.code) return '<strong>PICK</strong>';
+  if (scenarioPick && scenarioPick !== team.code) return '<strong>WHAT IF OUT</strong>';
+  if (state.eliminatedTeams.has(team.code)) return '<strong>OUT</strong>';
+  if (confirmed) return '<strong>IN</strong>';
+  return `<strong>${percent(team.probability)}</strong>`;
 }
 
 function slotSourceLabel(source) {
@@ -587,59 +777,6 @@ function contenderProbability(match, code) {
 
 function selectedTeam() {
   return state.teams.find(candidate => candidate.code === state.selectedTeam);
-}
-
-function nextPathStep(code, path) {
-  return rounds.map(([key, label]) => ({ key, label, match: path[key] }))
-    .find(step => step.match && contenderProbability(step.match, code) > 0.001);
-}
-
-function opponentChip(opponent) {
-  return `<span class="opponent-chip">${escapeHtml(opponent.name)} <strong>${percent(opponent.probability)}</strong></span>`;
-}
-
-function matchStatusText(match) {
-  const schedule = state.data.worldCupSchedule?.knockout?.[match.match];
-  if (!schedule?.date) return 'Schedule TBD';
-  const matchDate = new Date(`${schedule.date}T23:59:59Z`);
-  return matchDate < new Date()
-    ? 'Awaiting confirmed score'
-    : `${formatDate(schedule.date)} · scheduled`;
-}
-
-function forecastStateLabel() {
-  if (state.data.liveProjection?.active) return 'If live scores hold';
-  return state.data.servedStale ? 'Refreshing in background' : 'Current cache';
-}
-
-function liveProjectionSummary() {
-  const matches = state.data.liveProjection?.matches || [];
-  const active = matches.filter(match => match.provisional);
-  if (!active.length) return '';
-  return active.slice(0, 2).map(match => {
-    const team1 = state.teams.find(team => team.code === match.team1)?.name || match.team1;
-    const team2 = state.teams.find(team => team.code === match.team2)?.name || match.team2;
-    return `${team1} ${match.score1}-${match.score2} ${team2}`;
-  }).join(' · ');
-}
-
-function averageLikelyOpponentElo(code, path) {
-  const opponents = rounds
-    .map(([key]) => path[key]?.opponentsByTeam?.[code]?.[0])
-    .filter(Boolean)
-    .map(opponent => teamElo(opponent.code))
-    .filter(Boolean);
-  if (!opponents.length) return null;
-  return opponents.reduce((sum, elo) => sum + elo, 0) / opponents.length;
-}
-
-function hardestLikelyOpponent(code, path) {
-  return rounds
-    .map(([key]) => path[key]?.opponentsByTeam?.[code]?.[0])
-    .filter(Boolean)
-    .map(opponent => ({ ...opponent, elo: teamElo(opponent.code) }))
-    .filter(opponent => opponent.elo)
-    .sort((a, b) => b.elo - a.elo)[0];
 }
 
 function teamElo(code) {

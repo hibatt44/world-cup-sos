@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="print">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Cup 2026 Path Rankings</title>
+  <meta name="description" content="Rank World Cup 2026 knockout paths by opponent strength, draw value, and path volatility.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell paths-shell">
+    <header class="hero" id="top">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand" href="index.html">World Cup Forecast</a>
+        <div class="nav-links">
+          <a href="index.html">Bracket</a>
+          <a href="paths.html" aria-current="page">Path rankings</a>
+          <a href="groups.html">Group archive</a>
+          <a href="methodology.html">Methodology</a>
+        </div>
+        <div class="theme-switcher" aria-label="Choose visual design"></div>
+        <div class="status-pill" id="statusPill">Loading paths</div>
+      </nav>
+    </header>
+
+    <section class="section paths-hero" aria-labelledby="pathsTitle">
+      <p class="eyebrow">Knockout route intelligence</p>
+      <h1 id="pathsTitle">Path rankings</h1>
+      <p class="lede">Compare each team’s likely knockout route by opponent Elo, opening-match danger, draw value, and opponent uncertainty.</p>
+    </section>
+
+    <section class="eliminated-strip" id="eliminatedStrip" aria-live="polite" hidden></section>
+
+    <section class="path-rank-grid" aria-live="polite">
+      <article class="path-rank-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Average likely opponent Elo</p>
+          <h2>Hardest paths</h2>
+        </div>
+        <div class="path-rank-list" id="hardestPaths"></div>
+      </article>
+
+      <article class="path-rank-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Average likely opponent Elo</p>
+          <h2>Easiest paths</h2>
+        </div>
+        <div class="path-rank-list" id="easiestPaths"></div>
+      </article>
+
+      <article class="path-rank-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Round of 32</p>
+          <h2>Most dangerous openers</h2>
+        </div>
+        <div class="path-rank-list" id="dangerousOpeners"></div>
+      </article>
+
+      <article class="path-rank-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Title odds vs Elo rank</p>
+          <h2>Best bracket draw</h2>
+        </div>
+        <div class="path-rank-list" id="bestDraws"></div>
+      </article>
+
+      <article class="path-rank-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Title odds vs Elo rank</p>
+          <h2>Biggest bracket tax</h2>
+        </div>
+        <div class="path-rank-list" id="bracketTax"></div>
+      </article>
+
+      <article class="path-rank-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Opponent uncertainty</p>
+          <h2>Most volatile paths</h2>
+        </div>
+        <div class="path-rank-list" id="volatilePaths"></div>
+      </article>
+    </section>
+  </main>
+  <script src="theme.js"></script>
+  <script src="paths.js"></script>
+</body>
+</html>
