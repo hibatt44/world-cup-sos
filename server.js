@@ -1278,6 +1278,14 @@ app.get('/api/groups', (req, res) => {
     res.json({ ...worldCupGroups, schedule: worldCupSchedule });
 });
 
+Object.assign(app, {
+    collectKnockoutResults,
+    eventWinner,
+    forecastScoreboardDateRange,
+    normalizeEspnScoreboard,
+    scoreWinner
+});
+
 if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`World Cup SoS server running at http://localhost:${PORT}`);
@@ -1285,11 +1293,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = {
-    app,
-    collectKnockoutResults,
-    eventWinner,
-    forecastScoreboardDateRange,
-    normalizeEspnScoreboard,
-    scoreWinner
-};
+module.exports = app;
