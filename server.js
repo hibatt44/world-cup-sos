@@ -63,6 +63,8 @@ const CDN_CACHE_SECONDS = {
 };
 const ESPN_WORLD_CUP_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 const LIVE_SCORE_TTL = 15 * 1000;
+const LIVE_SCORE_EVENT_LIMIT = 3;
+const LIVE_SCORE_TIME_ZONE = process.env.LIVE_SCORE_TIME_ZONE || 'America/Chicago';
 const ESPN_TO_ELO_CODES = {
     ARG: 'AR',
     ALG: 'DZ',
@@ -816,7 +818,7 @@ async function getLiveScores() {
             source: 'espn',
             sourceUrl: ESPN_WORLD_CUP_SCOREBOARD,
             generatedAt: new Date().toISOString(),
-            events: normalizeEspnScoreboard(scoreboard)
+            events: liveScoreEventsForToday(scoreboard)
         };
 
         liveScoresCache = {
@@ -835,18 +837,30 @@ async function getLiveScores() {
 }
 
 function espnScoreboardUrl() {
-    const from = dateKeyWithOffset(-1).replaceAll('-', '');
-    const to = dateKeyWithOffset(2).replaceAll('-', '');
+    const today = liveScoreDateKey().replaceAll('-', '');
     const url = new URL(ESPN_WORLD_CUP_SCOREBOARD);
     url.searchParams.set('limit', '200');
-    url.searchParams.set('dates', `${from}-${to}`);
+    url.searchParams.set('dates', `${today}-${today}`);
     return url;
 }
 
-function dateKeyWithOffset(offsetDays) {
-    const date = new Date();
-    date.setUTCDate(date.getUTCDate() + offsetDays);
-    return date.toISOString().slice(0, 10);
+function liveScoreDateKey(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: LIVE_SCORE_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+}
+
+function liveScoreEventsForToday(scoreboard) {
+    const today = liveScoreDateKey();
+    return normalizeEspnScoreboard(scoreboard)
+        .filter(event => event.date && liveScoreDateKey(new Date(event.date)) === today)
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .slice(0, LIVE_SCORE_EVENT_LIMIT);
 }
 
 function normalizeEspnScoreboard(scoreboard) {

@@ -370,34 +370,30 @@ function renderLiveScores() {
     return;
   }
   if (!events.length) {
-    els.liveScores.innerHTML = '<div class="live-score-empty"><strong>No live World Cup matches right now</strong><span>Scores will appear here from ESPN when matches are active.</span></div>';
+    els.liveScores.innerHTML = '<div class="live-score-empty"><strong>No World Cup matches today</strong><span>Today’s scores will appear here from ESPN.</span></div>';
     return;
   }
 
   els.liveScores.innerHTML = `
     <div class="live-score-title">
       <span class="label">ESPN scores</span>
-      <strong>${events.some(event => event.status === 'in') ? 'Live now' : 'Match window'}</strong>
+      <strong>${liveScoreTitle(events)}</strong>
     </div>
     <div class="live-score-list">
-      ${events.slice(0, 6).map(liveScoreCard).join('')}
+      ${events.slice(0, 3).map(liveScoreCard).join('')}
     </div>`;
 }
 
 function prioritizeLiveEvents(events) {
   return [...events]
     .filter(event => event.competitors?.length >= 2)
-    .sort((a, b) => selectedEventRank(a) - selectedEventRank(b) || liveEventRank(a) - liveEventRank(b) || new Date(a.date) - new Date(b.date));
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
-function selectedEventRank(event) {
-  return event.competitors.some(team => team.code === state.selectedTeam) ? 0 : 1;
-}
-
-function liveEventRank(event) {
-  if (event.status === 'in') return 0;
-  if (event.status === 'pre') return 1;
-  return 2;
+function liveScoreTitle(events) {
+  if (events.some(event => event.status === 'in')) return 'Live now';
+  if (events.every(event => event.completed)) return 'Final scores';
+  return 'Today';
 }
 
 function liveScoreCard(event) {
@@ -409,18 +405,42 @@ function liveScoreCard(event) {
         ${escapeHtml(scoreStatusLabel(event))}
       </div>
       <div class="live-score-teams">
-        ${scoreTeamRow(home, event.status !== 'pre')}
-        ${scoreTeamRow(away, event.status !== 'pre')}
+        ${scoreTeamRow(home, event.status !== 'pre', event)}
+        ${scoreTeamRow(away, event.status !== 'pre', event)}
       </div>
     </article>`;
 }
 
-function scoreTeamRow(team, showScore) {
+function scoreTeamRow(team, showScore, event) {
+  const value = showScore ? escapeHtml(team.score) : liveScoreAdvanceProbability(team.code, event);
   return `
     <div class="live-score-team ${team.code === state.selectedTeam ? 'is-selected' : ''}">
       <span>${escapeHtml(team.shortName || team.name)}</span>
-      <strong>${showScore ? escapeHtml(team.score) : escapeHtml(team.espnCode || team.code || '')}</strong>
+      <strong>${value}</strong>
     </div>`;
+}
+
+function liveScoreAdvanceProbability(code, event) {
+  const match = liveScoreBracketMatch(event);
+  const nextMatch = match?.nextMatch ? bracketMatchByNumber(match.nextMatch) : null;
+  const advanceProbability = nextMatch
+    ? contenderProbability(nextMatch, code)
+    : state.teams.find(team => team.code === code)?.r32Prob;
+  return Number.isFinite(advanceProbability) ? percent(advanceProbability) : '';
+}
+
+function liveScoreBracketMatch(event) {
+  const codes = new Set((event.competitors || []).map(team => team.code).filter(Boolean));
+  if (codes.size < 2) return null;
+  return rounds
+    .flatMap(([round]) => state.data.bracketForecast?.[round] || [])
+    .find(match => [...codes].every(code => match.contenders?.some(team => team.code === code))) || null;
+}
+
+function bracketMatchByNumber(matchNumber) {
+  return rounds
+    .flatMap(([round]) => state.data.bracketForecast?.[round] || [])
+    .find(match => match.match === matchNumber) || null;
 }
 
 function scoreStatusLabel(event) {
