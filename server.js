@@ -112,6 +112,7 @@ const ESPN_TO_ELO_CODES = {
     POR: 'PT',
     QAT: 'QA',
     RSA: 'ZA',
+    SCO: 'SQ',
     SEN: 'SN',
     SRB: 'RS',
     SWE: 'SE',
