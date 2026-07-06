@@ -2246,6 +2246,73 @@ select {
 }
 
 @media (max-width: 700px) {
+  .bracket-toolbar {
+    grid-template-areas:
+      "search"
+      "copy"
+      "toggle"
+      "title";
+    gap: 9px;
+    margin: 6px 0 10px;
+    padding: 10px 0;
+  }
+
+  .bracket-toolbar-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .bracket-toolbar .eyebrow {
+    margin: 0;
+    font-size: 0.6rem;
+  }
+
+  .bracket-toolbar h1 {
+    font-size: 1.1rem;
+  }
+
+  .bracket-toolbar-copy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .bracket-toolbar-copy strong {
+    display: none;
+  }
+
+  .bracket-toolbar-copy .button {
+    min-height: 36px;
+    padding: 7px 11px;
+    font-size: 0.78rem;
+  }
+
+  .scenario-control-strip {
+    margin-top: 0;
+  }
+
+  .bracket-team-search {
+    gap: 4px;
+  }
+
+  .bracket-team-search label {
+    font-size: 0.7rem;
+  }
+
+  .team-search-results {
+    max-height: min(280px, calc(100dvh - 185px));
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bracket-focus-toggle {
+    width: 100%;
+    max-width: none;
+  }
+
   .path-summary {
     grid-template-columns: 1fr;
   }
@@ -2295,6 +2362,10 @@ select {
     width: min(100% - 20px, 1180px);
   }
 
+  .bracket-shell {
+    width: min(100% - 16px, 1500px);
+  }
+
   .topbar,
   .section-heading.split,
   .team-card,
@@ -2307,15 +2378,43 @@ select {
     display: grid;
   }
 
+  .bracket-shell .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 0 6px;
+  }
+
+  .bracket-shell .brand {
+    align-self: center;
+    width: fit-content;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 6px 8px;
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .theme-switcher {
     position: static;
     width: fit-content;
     box-shadow: none;
   }
 
+  .bracket-shell .theme-switcher {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
   .status-pill {
     width: fit-content;
     min-width: 0;
+  }
+
+  .bracket-shell .status-pill {
+    display: none;
   }
 
   .board-actions {
@@ -2325,6 +2424,34 @@ select {
 
   .nav-links {
     margin-left: 0;
+  }
+
+  .bracket-shell .nav-links {
+    grid-column: 1 / -1;
+    flex-wrap: nowrap;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .bracket-shell .nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .bracket-shell .nav-links a {
+    flex: 0 0 auto;
+    font-size: 0.76rem;
+    white-space: nowrap;
+  }
+
+  .bracket-team-search input {
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+
+  .team-search-results {
+    max-height: min(260px, calc(100dvh - 170px));
   }
 
   .hero-copy h2,
