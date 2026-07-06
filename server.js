@@ -1,11 +1,18 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const sosCalculator = require('./lib/sosCalculator');
 const bracketSimulator = require('./lib/bracketSimulator');
 const worldCupGroups = require('./data/worldCupGroups.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Prefer the built React app; fall back to legacy public/ during migration.
+const webDist = path.join(__dirname, 'web', 'dist');
+const legacyPublic = path.join(__dirname, 'public');
+const staticDir = fs.existsSync(path.join(webDist, 'index.html')) ? webDist : legacyPublic;
+console.log(`Serving static assets from: ${staticDir}`);
 
 // Cache for TSV data
 let cache = {
@@ -23,7 +30,7 @@ let monteCarloCache = {
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 // Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(staticDir));
 
 /**
  * Fetch TSV data from eloratings.net
@@ -189,8 +196,10 @@ app.get('/api/sos', async (req, res) => {
         const rankings = await getCachedData('rankings', 'World.tsv', parseRankings);
         const teams = await getCachedData('teams', 'en.teams.tsv', parseTeams);
 
-        const sosData = sosCalculator.calculateAllSoS(worldCupGroups, rankings.map);
-        const playoffSim = sosCalculator.simulatePlayoffSoS(worldCupGroups, rankings.map);
+        // Qualification is complete — pass an empty playoff sim so SoS
+        // computations don't waste time on historical placeholder paths.
+        const emptyPlayoffSim = { intercontinental: {}, uefa: {} };
+        const sosData = sosCalculator.calculateAllSoS(worldCupGroups, rankings.map, emptyPlayoffSim);
 
         // Run bracket-aware tournament simulation only if rankings have changed
         if (monteCarloCache.rankingsTimestamp !== cache.rankings.timestamp) {
@@ -213,25 +222,10 @@ app.get('/api/sos', async (req, res) => {
             name: teams[t.code] || t.code
         }));
 
-        // Enrich playoff simulation with team names
-        for (const bracket of Object.values(playoffSim.intercontinental)) {
-            bracket.teams = bracket.teams.map(t => ({
-                ...t,
-                name: teams[t.code] || t.code
-            }));
-        }
-        for (const path of Object.values(playoffSim.uefa)) {
-            path.teams = path.teams.map(t => ({
-                ...t,
-                name: teams[t.code] || t.code
-            }));
-        }
-
         res.json({
             ...sosData,
             worldCupGroups,
-            playoffSimulation: playoffSim,
-            groupSimulation: monteCarloCache.data,  // Add pre-computed simulation
+            groupSimulation: monteCarloCache.data,
             cacheAge: Date.now() - cache.rankings.timestamp,
             lastUpdated: new Date().toISOString()
         });
