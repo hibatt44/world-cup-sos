@@ -1,64 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="print">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>World Cup 2026 Bracket Paths</title>
-  <meta name="description" content="Explore likely World Cup knockout paths from 50,000 Elo simulations.">
-  <link rel="stylesheet" href="styles.css">
+  <meta http-equiv="refresh" content="0; url=index.html">
+  <link rel="canonical" href="index.html">
+  <title>World Cup 2026 Knockout Forecast</title>
 </head>
 <body>
-  <main class="shell bracket-shell">
-    <header class="hero" id="top">
-      <nav class="topbar" aria-label="Primary">
-        <a class="brand" href="index.html">World Cup Forecast</a>
-        <div class="nav-links">
-          <a href="index.html" aria-current="page">Bracket</a>
-          <a href="paths.html">Path rankings</a>
-          <a href="groups.html">Group archive</a>
-          <a href="methodology.html">Methodology</a>
-        </div>
-        <div class="theme-switcher" aria-label="Choose visual design"></div>
-        <div class="status-pill" id="statusPill">Loading simulations</div>
-      </nav>
-    </header>
-
-    <section class="bracket-toolbar" aria-labelledby="bracketTitle">
-      <div class="bracket-toolbar-title">
-        <p class="eyebrow">World Cup 2026 knockout bracket</p>
-        <h1 id="bracketTitle">Knockout bracket</h1>
-      </div>
-      <div class="bracket-toolbar-copy">
-        <strong>Click any team to trace its route.</strong>
-        <a class="button" href="paths.html">Rank every path</a>
-        <div class="scenario-control-strip" id="scenarioControls" aria-live="polite"></div>
-      </div>
-      <div class="bracket-team-search">
-        <label for="bracketTeamSearch">Selected team</label>
-        <input id="bracketTeamSearch" type="search" placeholder="Search teams…" autocomplete="off"
-          role="combobox" aria-autocomplete="list" aria-controls="bracketTeamResults" aria-expanded="false">
-        <div class="team-search-results" id="bracketTeamResults" role="listbox" hidden></div>
-      </div>
-      <label class="bracket-focus-toggle" title="Switch between the selected route and all 31 knockout matches">
-        <span class="toggle-caption">Bracket view</span>
-        <input id="showAllButton" type="checkbox" role="switch" checked>
-        <span class="toggle-option toggle-full">All matches</span>
-        <span class="toggle-track" aria-hidden="true"><span></span></span>
-        <span class="toggle-option toggle-focus">Selected path</span>
-      </label>
-    </section>
-
-    <section class="live-score-strip" id="liveScoreStrip" aria-live="polite"></section>
-    <section class="path-summary" id="pathSummary" aria-live="polite"></section>
-    <section class="scenario-mode-banner" id="scenarioBanner" aria-live="polite" hidden></section>
-
-    <section class="section bracket-stage" aria-label="Projected bracket from round of 32 to final">
-      <div class="bracket-scroll">
-        <div class="bracket-board" id="bracketBoard"></div>
-      </div>
-    </section>
-  </main>
-  <script src="theme.js"></script>
-  <script src="bracket.js"></script>
+  <p><a href="index.html">Open the knockout forecast</a></p>
+  <script>window.location.replace('index.html');</script>
 </body>
 </html>

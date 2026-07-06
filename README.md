@@ -32,7 +32,7 @@ open http://localhost:3000
 |----------|-------------|
 | `GET /api/rankings` | Current Elo rankings for all teams |
 | `GET /api/groups` | World Cup group compositions |
-| `GET /api/sos` | Strength of schedule + simulations |
+| `GET /api/sos` | Tournament forecast payload: group archive, knockout bracket, path probabilities, live/scenario state |
 | `GET /api/results` | Recent match results |
 
 ## Deployment to Railway
@@ -73,7 +73,7 @@ soccer_elo/
 ├── server.js              # Express server & API endpoints
 ├── lib/
 │   ├── elo.js             # Shared Elo probability algorithm
-│   ├── sosCalculator.js   # SoS calculations & group simulations
+│   ├── sosCalculator.js   # SoS calculations & expected playoff Elo support
 │   └── bracketSimulator.js # Full tournament Monte Carlo
 ├── data/
 │   └── worldCupGroups.json # Tournament structure

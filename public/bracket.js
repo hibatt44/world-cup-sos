@@ -495,25 +495,26 @@ function renderSummary() {
     return;
   }
   const stages = [
-    ['R16', team.r16Prob, 'r16Prob'],
     ['QF', team.qfProb, 'qfProb'],
+    ['Semis', team.sfProb, 'sfProb'],
     ['Final', team.finalProb, 'finalProb'],
     ['Title', team.winProb, 'winProb']
   ];
   const path = canonicalPath(team.code);
+  const remainingRoute = remainingRouteRounds(team.code, path);
   els.summary.innerHTML = `
     <div class="path-summary-copy">
       <span class="label">Selected team</span>
-      <strong>${flagEmoji(team.code) ? `<span class="selected-team-flag">${escapeHtml(flagEmoji(team.code))}</span>` : ''}${escapeHtml(team.name)}</strong>
+      <strong>${flagMarkup(team.code, 'selected-team-flag')}${escapeHtml(team.name)}</strong>
       <small>${escapeHtml(team.elo)} Elo${eliminated ? ' · Eliminated' : deltaLabel() ? ` · ${escapeHtml(deltaLabel())}` : ''}</small>
     </div>
     <div class="path-odds-chart" aria-label="Selected team odds">
       ${stages.map(([label, value, key]) => oddsChartItem(label, value, deltaBadge(team.code, key))).join('')}
     </div>
     <div class="path-route-line">
-      <span class="label">Likely opponents if reached</span>
+      <span class="label">${escapeHtml(routeSummaryLabel(team, remainingRoute))}</span>
       <div class="route-opponent-strip">
-        ${routeOpponentItems(team.code, path)}
+        ${routeOpponentItems(team.code, path, remainingRoute)}
       </div>
     </div>`;
 }
@@ -539,9 +540,33 @@ function oddsChartItem(label, value, delta) {
     </div>`;
 }
 
-function routeOpponentItems(code, path) {
-  const items = rounds.map(([key, label]) => routeOpponentItem(code, key, label, path[key])).filter(Boolean);
-  return items.length ? items.join('') : '<span class="muted-chip">No clear knockout path</span>';
+function remainingRouteRounds(code, path) {
+  if (state.eliminatedTeams.has(code)) return [];
+  return rounds
+    .map(([key, label]) => ({ key, label, match: path[key] }))
+    .filter(({ key, match }) => {
+      if (!match || contenderProbability(match, code) <= 0.001) return false;
+      const locked = match.completed || state.scenarioPicks.has(match.match);
+      if (!locked) return true;
+      return match.completed?.provisional;
+    });
+}
+
+function routeSummaryLabel(team, remainingRoute) {
+  if (state.eliminatedTeams.has(team.code)) return 'Knockout status';
+  if (!remainingRoute.length) return 'Path status';
+  const firstRound = shortRoundLabel(remainingRoute[0].label);
+  return `Likely remaining opponents from ${firstRound}`;
+}
+
+function routeOpponentItems(code, path, remainingRoute = remainingRouteRounds(code, path)) {
+  if (state.eliminatedTeams.has(code)) {
+    return '<span class="muted-chip">Eliminated from the knockout bracket</span>';
+  }
+  const items = remainingRoute
+    .map(({ key, label, match }) => routeOpponentItem(code, key, label, match))
+    .filter(Boolean);
+  return items.length ? items.join('') : '<span class="muted-chip">No remaining knockout path</span>';
 }
 
 function routeOpponentItem(code, round, label, match) {
@@ -551,20 +576,18 @@ function routeOpponentItem(code, round, label, match) {
   const opponentProbability = opponent ? opponent.probability : contenderProbability(match, code);
   const opponentElo = opponent ? teamElo(opponent.code) : 0;
   const beatChance = opponentElo ? knockoutWinProbability(teamElo(code), opponentElo) : null;
-  const opponentFlag = opponent ? flagEmoji(opponent.code) : '';
-  const selectedFlag = flagEmoji(code);
   return `
     <span class="route-opponent route-${escapeHtml(round)}">
       <span class="route-opponent-head">
         <em>${escapeHtml(shortRoundLabel(label))}</em>
         <strong>
-          ${opponentFlag ? `<span class="route-team-flag">${escapeHtml(opponentFlag)}</span>` : ''}
+          ${opponent ? flagMarkup(opponent.code, 'route-team-flag') : ''}
           <span class="route-team-name">${opponent ? escapeHtml(routeTeamName(opponent.name)) : 'TBD'}</span>
           ${opponentElo ? `<span class="route-team-elo">- ${escapeHtml(opponentElo)} ELO</span>` : ''}
         </strong>
       </span>
       <span class="route-beat">
-        <b>${selectedFlag ? `<span>${escapeHtml(selectedFlag)}</span>` : ''}${Number.isFinite(beatChance) ? percent(beatChance) : 'TBD'}</b>
+        <b>${flagMarkup(code)}${Number.isFinite(beatChance) ? percent(beatChance) : 'TBD'}</b>
         <span>win chance</span>
       </span>
       <span class="route-context">
@@ -588,6 +611,18 @@ function routeTeamName(name) {
   return name === 'Bosnia and Herzegovina' ? 'Bosnia' : name;
 }
 
+function flagMarkup(code, className = '') {
+  if (code === 'EN') {
+    const classes = ['england-flag', className].filter(Boolean).join(' ');
+    return `<span class="${escapeHtml(classes)}" role="img" aria-label="England flag"></span>`;
+  }
+
+  const emoji = flagEmoji(code);
+  return emoji
+    ? `<span${className ? ` class="${escapeHtml(className)}"` : ''}>${escapeHtml(emoji)}</span>`
+    : '';
+}
+
 function flagEmoji(code) {
   const flagCodes = {
     AR: 'AR', AT: 'AT', AU: 'AU', BA: 'BA', BE: 'BE', BR: 'BR', CA: 'CA', CD: 'CD',
@@ -598,7 +633,6 @@ function flagEmoji(code) {
     SQ: 'SK', TN: 'TN', TR: 'TR',
     US: 'US', UY: 'UY', UZ: 'UZ', ZA: 'ZA'
   };
-  if (code === 'EN') return '🏴';
   const countryCode = flagCodes[code];
   if (!countryCode) return '';
   return countryCode

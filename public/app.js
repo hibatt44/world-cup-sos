@@ -1,14 +1,11 @@
 const state = {
   sos: null,
-  rankings: [],
-  results: [],
   teams: [],
   selectedGroup: 'D',
   selectedTeam: null,
   selectedDate: localDateKey(new Date())
 };
 
-const worldCupStart = new Date('2026-06-11T19:00:00-05:00');
 const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
 const els = {
@@ -24,26 +21,14 @@ const els = {
   contenderGrid: document.querySelector('#contenderGrid'),
   groupSelect: document.querySelector('#groupSelect'),
   groupDetail: document.querySelector('#groupDetail'),
-  groupRankings: document.querySelector('#groupRankings'),
-  playoffList: document.querySelector('#playoffList'),
-  teamA: document.querySelector('#teamA'),
-  teamB: document.querySelector('#teamB'),
-  matchResult: document.querySelector('#matchResult'),
-  resultsStrip: document.querySelector('#resultsStrip')
+  groupRankings: document.querySelector('#groupRankings')
 };
 
 init();
 
 async function init() {
-  setCountdown();
-  window.setInterval(setCountdown, 60 * 1000);
-
   try {
-    const [sos, rankings, results] = await Promise.all([
-      getJson('/api/sos'),
-      getJson('/api/rankings'),
-      getJson('/api/results')
-    ]);
+    const sos = await getJson('/api/sos');
 
     state.sos = sos;
     if (sos.worldCupSchedule) {
@@ -51,9 +36,7 @@ async function init() {
         ? sos.worldCupSchedule.groupStageEnd
         : clampDate(state.selectedDate, sos.worldCupSchedule.groupStageStart, sos.worldCupSchedule.groupStageEnd);
     }
-    state.rankings = rankings.rankings || [];
-    state.results = results.results || [];
-    state.teams = buildTeamList(sos, state.rankings);
+    state.teams = buildTeamList(sos);
     const firstScheduledGroup = orderedGroups(Object.keys(state.sos.worldCupGroups.groups))[0];
     state.selectedGroup = firstScheduledGroup || 'D';
     state.selectedTeam = (state.sos.groupSimulation[state.selectedGroup] || [])[0]?.code || 'US';
@@ -78,6 +61,7 @@ function renderAll() {
   const groupNames = Object.keys(state.sos.worldCupGroups.groups);
   els.groupCount.textContent = groupNames.length;
   els.teamCount.textContent = groupNames.length * 4;
+  els.countdownText.textContent = 'Group stage complete';
   els.lastUpdated.textContent = `Updated ${formatDateTime(state.sos.lastUpdated)}`;
 
   renderGroupBoard();
@@ -86,9 +70,6 @@ function renderAll() {
   renderTeamSpotlight();
   renderGroupSelect(groupNames);
   renderGroup();
-  renderPlayoffs();
-  renderMatchLab();
-  renderResults();
 }
 
 function renderTeamSpotlight() {
@@ -367,88 +348,8 @@ function selectTeam(code) {
   renderGroup();
 }
 
-function renderPlayoffs() {
-  const intercontinental = Object.entries(state.sos.playoffSimulation.intercontinental || {})
-    .map(([name, data]) => playoffCard(name.replace('bracket', 'Intercontinental '), data));
-  const uefa = Object.entries(state.sos.playoffSimulation.uefa || {})
-    .map(([name, data]) => playoffCard(name.replace('path', 'UEFA Path '), data));
-
-  const cards = [...intercontinental, ...uefa];
-  if (!cards.length) {
-    els.playoffList.innerHTML = `
-      <article class="field-card">
-        <strong>All 48 teams are confirmed.</strong>
-        <p>Group strength and matchup odds now use each qualified team's current Elo directly, with no expected playoff slots.</p>
-      </article>
-    `;
-    return;
-  }
-
-  els.playoffList.innerHTML = cards.join('');
-}
-
-function playoffCard(title, data) {
-  const favorite = data.teams[0];
-  return `
-    <article class="playoff-card">
-      <div>
-        <span class="label">${title} → Group ${data.destinationGroup}</span>
-        <h3>${favorite.name || favorite.code}</h3>
-        <p>${percent(favorite.prob)} path favorite · expected winner ${data.expectedElo} Elo</p>
-      </div>
-      <span class="difficulty ${data.difficulty.toLowerCase()}">${data.difficulty}</span>
-    </article>
-  `;
-}
-
-function renderMatchLab() {
-  const options = state.teams.map(team => `<option value="${team.code}">${team.name} (${team.elo})</option>`).join('');
-  els.teamA.innerHTML = options;
-  els.teamB.innerHTML = options;
-
-  els.teamA.value = pickTeam('BR') || state.teams[0]?.code;
-  els.teamB.value = pickTeam('FR') || state.teams[1]?.code;
-  els.teamA.addEventListener('change', renderMatchResult);
-  els.teamB.addEventListener('change', renderMatchResult);
-  renderMatchResult();
-}
-
-function renderMatchResult() {
-  const teamA = state.teams.find(team => team.code === els.teamA.value);
-  const teamB = state.teams.find(team => team.code === els.teamB.value);
-  if (!teamA || !teamB) return;
-
-  const probs = matchProbabilities(teamA.elo, teamB.elo);
-  els.matchResult.innerHTML = `
-    <div class="match-title">
-      <strong>${teamA.name}</strong>
-      <span>vs</span>
-      <strong>${teamB.name}</strong>
-    </div>
-    ${probRow(`${teamA.name} win`, probs.winProb)}
-    ${probRow('Draw', probs.drawProb)}
-    ${probRow(`${teamB.name} win`, probs.lossProb)}
-    <p>Knockout edge: ${teamA.name} ${percent(eloWinProbability(teamA.elo, teamB.elo))}</p>
-  `;
-}
-
-function renderResults() {
-  els.resultsStrip.innerHTML = state.results.slice(0, 16).map(result => `
-    <article class="result-card">
-      <span>${result.date} · ${result.tournament}</span>
-      <strong>${result.team1Name} ${result.score1}-${result.score2} ${result.team2Name}</strong>
-      <p>${signed(result.pointsExchanged)} Elo swing</p>
-    </article>
-  `).join('');
-}
-
-function buildTeamList(sos, rankings) {
-  const known = new Map(rankings.map(team => [team.code, {
-    code: team.code,
-    name: team.name,
-    elo: team.rating
-  }]));
-
+function buildTeamList(sos) {
+  const known = new Map();
   Object.values(sos.groupSimulation || {}).flat().forEach(team => {
     known.set(team.code, {
       code: team.code,
@@ -481,74 +382,16 @@ function recordLine(record) {
   return `${record.wins}-${record.draws}-${record.losses} · ${record.points} pts`;
 }
 
-function groupTeamsBySos(group) {
-  return state.sos.teams
-    .filter(team => team.group === group)
-    .sort((a, b) => b.groupOpponentSoS - a.groupOpponentSoS);
-}
-
-function teamName(code) {
-  if (!code) return '--';
-  return getTeam(code)?.name || code;
-}
-
-function matchProbabilities(teamElo, oppElo) {
-  const winExpectancy = eloWinProbability(teamElo, oppElo);
-  const drawProb = 0.15 + 0.12 * Math.exp(-0.004 * Math.abs(teamElo - oppElo));
-  return {
-    winProb: winExpectancy * (1 - drawProb),
-    drawProb,
-    lossProb: (1 - winExpectancy) * (1 - drawProb)
-  };
-}
-
-function eloWinProbability(rating1, rating2) {
-  return 1 / (1 + Math.pow(10, (rating2 - rating1) / 400));
-}
-
-function probRow(label, value) {
-  return `
-    <div class="prob-row">
-      <span>${label}</span>
-      <strong>${percent(value)}</strong>
-      <div class="bar"><span style="width: ${value * 100}%"></span></div>
-    </div>
-  `;
-}
-
-function setCountdown() {
-  const diffMs = worldCupStart - new Date();
-  if (diffMs <= 0) {
-    els.countdownText.textContent = 'The World Cup is live';
-    return;
-  }
-
-  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  els.countdownText.textContent = `${days} days to kickoff`;
-}
-
 function renderError() {
   const message = '<p class="empty">Could not load live Elo data. Start the server with network access and refresh.</p>';
   els.groupBoardGrid.innerHTML = message;
   els.contenderGrid.innerHTML = message;
   els.groupDetail.innerHTML = message;
   els.groupRankings.innerHTML = '';
-  els.playoffList.innerHTML = message;
-  els.matchResult.innerHTML = message;
-  els.resultsStrip.innerHTML = message;
 }
 
 function percent(value) {
   return `${formatter.format((value || 0) * 100)}%`;
-}
-
-function signed(value) {
-  if (!Number.isFinite(value)) return '0';
-  return value > 0 ? `+${value}` : `${value}`;
-}
-
-function pickTeam(code) {
-  return state.teams.some(team => team.code === code) ? code : null;
 }
 
 function formatDateTime(value) {
