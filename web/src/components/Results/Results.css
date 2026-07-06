@@ -1,0 +1,126 @@
+.results-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.results-section__toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  color: var(--text-primary);
+}
+
+.results-section__title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-right: 0.75rem;
+}
+
+.results-section__count {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.results-section__chevron {
+  color: var(--text-muted);
+}
+
+.results-section__body {
+  padding: 0 1.25rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.results-section__controls {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.75rem 0;
+}
+
+.chip {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.chip.is-active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.results-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.result-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 60px 1fr 140px;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.85rem;
+}
+
+.result-row__date,
+.result-row__tourney {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-row__tourney {
+  text-align: right;
+}
+
+.result-row__team {
+  color: var(--text-primary);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-row__team--right {
+  text-align: right;
+}
+
+.result-row__team:not(:disabled):hover {
+  color: var(--accent-primary);
+}
+
+.result-row__team:disabled {
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.result-row__score {
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .result-row {
+    grid-template-columns: 70px 1fr 50px 1fr;
+    gap: 0.4rem;
+  }
+  .result-row__tourney {
+    display: none;
+  }
+}

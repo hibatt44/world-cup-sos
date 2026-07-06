@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "build": "cd web && npm install && npm run build",
+    "postinstall": "cd web && npm install",
     "test": "python3 test_win_probability.py && node test_bracket_simulator.js && node test_bracket_page.js && node test_knockout_penalties.js && node test_country_codes.js && echo 'Unit tests passed'"
   },
   "dependencies": {

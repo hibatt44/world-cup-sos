@@ -12,6 +12,12 @@ const CACHE_DIR = path.join(__dirname, '.cache');
 const SOS_CACHE_FILE = path.join(CACHE_DIR, 'sos-latest.json');
 const SNAPSHOT_DIR = path.join(CACHE_DIR, 'forecast-snapshots');
 
+// Prefer the built React app; fall back to legacy public/ during migration.
+const webDist = path.join(__dirname, 'web', 'dist');
+const legacyPublic = path.join(__dirname, 'public');
+const staticDir = fs.existsSync(path.join(webDist, 'index.html')) ? webDist : legacyPublic;
+console.log(`Serving static assets from: ${staticDir}`);
+
 // Cache for TSV data
 let cache = {
     rankings: { data: null, timestamp: 0 },
@@ -138,7 +144,7 @@ const ESPN_TO_ELO_CODES = {
 hydrateSosCacheFromDisk();
 
 // Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(staticDir));
 
 /**
  * Fetch TSV data from eloratings.net
