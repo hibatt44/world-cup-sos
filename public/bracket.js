@@ -137,15 +137,13 @@ function setupInteractions() {
     const firstResult = filteredTeams(event.target.value)[0];
     if (!firstResult) return;
     event.preventDefault();
-    selectTeam(firstResult.code);
-    closeSearchResults();
+    selectSearchTeam(firstResult.code);
   });
   els.searchResults.addEventListener('mousedown', event => {
     const option = event.target.closest?.('[data-search-team]');
     if (!option) return;
     event.preventDefault();
-    selectTeam(option.dataset.searchTeam);
-    closeSearchResults();
+    selectSearchTeam(option.dataset.searchTeam);
   });
   els.focus.addEventListener('change', event => {
     state.focused = event.target.checked;
@@ -191,6 +189,12 @@ function selectTeam(code) {
   state.selectedTeam = code;
   state.focused = true;
   render();
+}
+
+function selectSearchTeam(code) {
+  selectTeam(code);
+  closeSearchResults();
+  els.search.blur();
 }
 
 function toggleScenarioPick(match, code) {
