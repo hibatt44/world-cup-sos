@@ -2016,7 +2016,7 @@ select {
 
 .match-heading {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(74px, 0.72fr) minmax(0, 1.28fr);
   gap: 8px;
   align-items: start;
   margin-bottom: 8px;
@@ -2031,14 +2031,20 @@ select {
   display: block;
 }
 
-.match-heading time,
-.match-heading div > span {
-  font-size: 0.78rem;
+.match-date {
+  width: fit-content;
+  border: 1px solid var(--line);
+  background: var(--field);
+  padding: 3px 6px;
+  color: var(--ink);
+  font-size: 0.76rem;
   font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .match-heading small {
-  margin-top: 2px;
+  margin-top: 4px;
   color: var(--muted);
   font-size: 0.61rem;
 }
@@ -2108,6 +2114,17 @@ select {
   box-shadow: inset 2px 0 color-mix(in srgb, var(--green) 38%, transparent);
 }
 
+.bracket-team.is-match-winner {
+  background: color-mix(in srgb, var(--green) 12%, var(--panel));
+  box-shadow: inset 3px 0 var(--green);
+  color: var(--green-dark);
+  font-weight: 850;
+}
+
+.bracket-team.is-match-winner strong {
+  color: var(--green-dark);
+}
+
 .bracket-team.is-eliminated {
   color: var(--muted);
   background: color-mix(in srgb, var(--red) 7%, var(--panel));
@@ -2133,6 +2150,10 @@ select {
   background: var(--green);
   color: #fff;
   box-shadow: none;
+}
+
+.bracket-team.selected.is-match-winner strong {
+  color: #fff;
 }
 
 .bracket-team.selected.is-eliminated {
@@ -2396,18 +2417,6 @@ select {
     white-space: nowrap;
   }
 
-  .theme-switcher {
-    position: static;
-    width: fit-content;
-    box-shadow: none;
-  }
-
-  .bracket-shell .theme-switcher {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
-  }
-
   .status-pill {
     width: fit-content;
     min-width: 0;
@@ -2500,133 +2509,7 @@ select {
   }
 }
 
-/* Four visual directions -------------------------------------------------- */
-.theme-switcher {
-  position: fixed;
-  z-index: 20;
-  right: 18px;
-  bottom: 18px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel);
-  padding: 7px 8px 7px 12px;
-  box-shadow: var(--shadow);
-}
-
-.theme-switcher-label {
-  color: var(--muted);
-  font-size: .66rem;
-  font-weight: 900;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-}
-
-.theme-options { display: flex; gap: 4px; }
-
-.theme-options button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  padding: 5px 8px;
-  cursor: pointer;
-  font-size: .72rem;
-  font-weight: 800;
-}
-
-.theme-options button:hover,
-.theme-options button.active { background: var(--field); color: var(--ink); }
-
-.theme-swatch {
-  width: 13px;
-  height: 13px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  background: var(--swatch-a);
-}
-
-[data-set-theme="copa"] { --swatch-a: #ff6847; }
-[data-set-theme="print"] { --swatch-a: #ffd643; }
-
-/* 01 — Copa Heat: flat festival color and soft, expressive shapes. */
-html[data-theme="copa"] {
-  --ink: #30172e;
-  --muted: #74546f;
-  --line: rgba(91, 32, 78, .18);
-  --paper: #fff0d6;
-  --panel: #fff8e9;
-  --field: #f8dccd;
-  --green: #f04d3a;
-  --green-dark: #9a285d;
-  --red: #d5253c;
-  --gold: #ec8c22;
-  --blue: #76276c;
-  --today-highlight: #f36b4f;
-  --tomorrow-highlight: #c993bb;
-  --shadow: 0 18px 45px rgba(118, 39, 108, .15);
-  --radius: 24px;
-}
-
-html[data-theme="copa"] body {
-  background: #f8d8c8;
-}
-
-html[data-theme="copa"] h1,
-html[data-theme="copa"] h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: -.045em; }
-html[data-theme="copa"] .contender-card:nth-child(3n + 1) { transform: rotate(-.35deg); }
-html[data-theme="copa"] .contender-card:nth-child(3n) { transform: rotate(.35deg); }
-html[data-theme="copa"] .bar span { background: #f04d3a; }
-html[data-theme="copa"] .contender-card:nth-child(4n + 2) { border-top: 5px solid #ff6847; }
-html[data-theme="copa"] .contender-card:nth-child(4n) { border-top: 5px solid #76276c; }
-
-html[data-theme="copa"] .group-board-card.playing-today {
-  position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, .88);
-}
-
-html[data-theme="copa"] .group-board-card.playing-tomorrow {
-  position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, .88);
-}
-
-html[data-theme="copa"] .group-board-card.playing-today::before,
-html[data-theme="copa"] .group-board-card.playing-tomorrow::before {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  right: 0;
-  left: 0;
-  content: "";
-  pointer-events: none;
-}
-
-html[data-theme="copa"] .group-board-card.playing-today::before {
-  height: 6px;
-  background: var(--today-highlight);
-}
-
-html[data-theme="copa"] .group-board-card.playing-tomorrow::before {
-  height: 4px;
-  background: var(--tomorrow-highlight);
-}
-
-html[data-theme="copa"] .group-board-card.playing-today .group-board-head .label {
-  width: fit-content;
-  background: var(--today-highlight);
-  color: var(--ink);
-  padding: 3px 6px;
-}
-
-/* 02 — Matchday Print: tactile paper, hard rules, editorial hierarchy. */
+/* Matchday Print: tactile paper, hard rules, editorial hierarchy. */
 html[data-theme="print"] {
   --ink: #171711;
   --muted: #57564d;
@@ -2697,20 +2580,6 @@ html[data-theme="print"] .group-board-card.playing-tomorrow .group-board-head .l
   background: #dfc4d7;
 }
 
-/* Keep inset surfaces flat in both retained directions. */
-html[data-theme="copa"] .path-summary,
+/* Keep inset surfaces flat in the retained direction. */
 html[data-theme="print"] .path-summary,
-html[data-theme="copa"] .formula,
 html[data-theme="print"] .formula { background: var(--field); }
-
-@media (max-width: 720px) {
-  .theme-switcher {
-    position: static;
-    width: fit-content;
-    box-shadow: none;
-  }
-
-  .theme-switcher-label, .theme-name { display: none; }
-  .theme-options button { padding: 7px; }
-  .theme-swatch { width: 16px; height: 16px; }
-}

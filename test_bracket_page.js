@@ -52,6 +52,15 @@ function forecast(match, nextMatch, selectedProbability, opponentName) {
     return {
         match,
         nextMatch,
+        completed: match === 1 ? {
+            match,
+            team1: 'XX',
+            team2: `O${match}`,
+            score1: 2,
+            score2: 1,
+            winner: 'XX',
+            loser: `O${match}`
+        } : null,
         contenders: [
             { code: 'XX', name: selected.name, probability: selectedProbability },
             { code: `O${match}`, name: opponentName, probability: 0.7 }
@@ -81,7 +90,22 @@ const data = {
         ]))
     },
     eliminatedTeams: ['O2'],
-    groupSimulation: { A: [selected] },
+    groupSimulation: {
+        A: [
+            selected,
+            {
+                code: 'O2',
+                name: 'Opening opponent',
+                elo: 1500,
+                r32Prob: 1,
+                r16Prob: 0.5,
+                qfProb: 0.25,
+                sfProb: 0.125,
+                finalProb: 0.0625,
+                winProb: 0.03125
+            }
+        ]
+    },
     bracketForecast: {
         r32: [forecast(1, 10, 0.4, 'Wrong branch'), forecast(2, 11, 0.6, 'Opening opponent')],
         r16: [forecast(10, 20, 0.35, 'Wrong opponent'), forecast(11, 21, 0.2, 'Correct opponent')],
@@ -99,10 +123,11 @@ global.fetch = async () => ({ ok: true, json: async () => data });
 
     assert.ok(!elements.pathSummary.innerHTML.includes('<img'));
     assert.ok(!elements.bracketBoard.innerHTML.includes('<img'));
-    assert.equal(elements.bracketTeamSearch.value, selected.name);
-    assert.match(elements.pathSummary.innerHTML, /Selected team/);
-    assert.ok(elements.bracketBoard.classList.contains('is-focused'));
-    assert.equal(elements.showAllButton.disabled, false);
+    assert.equal(elements.bracketTeamSearch.value, '');
+    assert.match(elements.pathSummary.innerHTML, /Choose a team to trace its route/);
+    assert.ok(!elements.bracketBoard.classList.contains('is-focused'));
+    assert.equal(elements.showAllButton.disabled, true);
+    assert.match(elements.bracketBoard.innerHTML, /data-team-code="XX"/);
 
     elements.bracketTeamSearch.handlers.input({ target: { value: '' } });
     assert.equal(elements.bracketTeamSearch.value, '');
@@ -124,7 +149,11 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.match(elements.bracketBoard.innerHTML, /has-locked-slot selected/);
     assert.match(elements.bracketBoard.innerHTML, /Starting bracket slot confirmed/);
     assert.match(elements.bracketBoard.innerHTML, /is-eliminated/);
-    assert.match(elements.bracketBoard.innerHTML, /<strong>OUT<\/strong>/);
+    assert.match(elements.bracketBoard.innerHTML, /is-match-winner/);
+    assert.doesNotMatch(elements.bracketBoard.innerHTML, /is-eliminated[^"]*"[^>]*data-team-code="O2"/);
+    assert.match(elements.bracketBoard.innerHTML, /<strong>2<\/strong>/);
+    assert.match(elements.bracketBoard.innerHTML, /<strong>1<\/strong>/);
+    assert.match(elements.bracketBoard.innerHTML, /<strong>50%<\/strong>/);
     assert.ok(elements.bracketBoard.classList.contains('is-focused'));
     assert.equal(elements.showAllButton.disabled, false);
     assert.match(elements.bracketBoard.innerHTML, /aria-pressed="true"/);
@@ -138,6 +167,7 @@ global.fetch = async () => ({ ok: true, json: async () => data });
     assert.match(elements.bracketBoard.innerHTML, /Venue 2/);
     assert.match(elements.bracketBoard.innerHTML, /Group A winner/);
     assert.match(elements.bracketBoard.innerHTML, /Winner of FIFA match/);
+    assert.match(elements.bracketBoard.innerHTML, /Win probability/);
     assert.doesNotMatch(elements.bracketBoard.innerHTML, /Slot 1|Bracket 2|Projected/);
 
     elements.showAllButton.handlers.change({ target: { checked: false } });

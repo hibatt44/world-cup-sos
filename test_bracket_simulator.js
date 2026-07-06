@@ -21,6 +21,14 @@ const completedGroupMatches = Object.fromEntries(Object.entries(worldCupGroups.g
     group,
     deterministicGroupResults(group, info.teams)
 ]));
+const completedGroupResult = simulateTournament(
+    worldCupGroups,
+    ratings,
+    {},
+    names,
+    7,
+    completedGroupMatches
+);
 const lockedWinner = worldCupGroups.groups.A.teams[1];
 const lockedLoser = worldCupGroups.groups.B.teams[1];
 const lockedResult = simulateTournament(
@@ -142,6 +150,21 @@ const lockedLoserForecast = Object.values(lockedResult.groupSimulation).flat().f
 assert.equal(lockedWinnerForecast.r16Prob, 1, 'completed R32 winner should always advance to R16');
 assert.equal(lockedLoserForecast.r16Prob, 0, 'completed R32 loser should be eliminated from R16');
 assert.equal(lockedResult.bracketForecast.r32.find(match => match.match === 1).completed.winner, lockedWinner);
+
+const exactMatchOne = completedGroupResult.bracketForecast.r32.find(match => match.match === 1);
+assert.deepEqual(
+    exactMatchOne.slots.map(slot => slot.contenders.map(team => [team.code, team.probability])),
+    [[[lockedWinner, 1]], [[lockedLoser, 1]]],
+    'known R32 slots should be deterministic after all groups are complete'
+);
+const exactWinnerForecast = Object.values(completedGroupResult.groupSimulation).flat().find(team => team.code === lockedWinner);
+const exactLoserForecast = Object.values(completedGroupResult.groupSimulation).flat().find(team => team.code === lockedLoser);
+assert.ok(Math.abs(exactWinnerForecast.r16Prob - 0.5) < 1e-12, 'static Elo solver should produce exact R32 odds');
+assert.ok(Math.abs(exactLoserForecast.r16Prob - 0.5) < 1e-12, 'static Elo solver should produce exact R32 odds');
+assert.ok(
+    Math.abs(Object.values(completedGroupResult.groupSimulation).flat().reduce((sum, team) => sum + team.winProb, 0) - 1) < 1e-12,
+    'exact title probabilities should sum to 1'
+);
 
 function resolveCurrentR32Slot(slot, match) {
     const position = Number(slot[0]);

@@ -6,9 +6,13 @@ const state = {
   eliminatedTeams: new Set(),
   scenarioPicks: new Map(),
   scenarioMode: false,
-  selectedTeam: 'US',
-  focused: true
+  selectedTeam: null,
+  focused: false,
+  scenarioRefreshTimer: null,
+  scenarioRefreshController: null,
+  scenarioRefreshRequestId: 0
 };
+const SCENARIO_REFRESH_DELAY_MS = 120;
 const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   weekday: 'short',
@@ -53,15 +57,15 @@ async function init() {
     const requestedTeam = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('team')?.toUpperCase()
       : null;
-    state.selectedTeam = state.teams.some(team => team.code === requestedTeam)
-      ? requestedTeam
-      : state.teams.some(team => team.code === 'US') ? 'US' : state.teams[0]?.code || null;
+    state.selectedTeam = state.teams.some(team => team.code === requestedTeam) ? requestedTeam : null;
     state.focused = Boolean(state.selectedTeam);
     setupInteractions();
     render();
     loadLiveScores();
     if (typeof window !== 'undefined') window.setInterval(loadLiveScores, 30 * 1000);
-    els.status.textContent = `${Number(state.data.simulationCount || 50000).toLocaleString()} simulations loaded`;
+    els.status.textContent = state.scenarioPicks.size
+      ? 'Exact scenario forecast'
+      : `${Number(state.data.simulationCount || 50000).toLocaleString()} simulations loaded`;
     if (state.data.liveProjection?.active) els.status.textContent += ' · live projection';
     if (state.data.servedStale) els.status.textContent += ' · refreshing';
     els.status.classList.add('is-live');
@@ -71,8 +75,8 @@ async function init() {
   }
 }
 
-async function loadForecast() {
-  const response = await fetch(forecastUrl());
+async function loadForecast(options = {}) {
+  const response = await fetch(forecastUrl(), options);
   if (!response.ok) throw new Error('Could not load tournament simulations');
   applyForecast(await response.json());
 }
@@ -236,18 +240,33 @@ function findForecastMatch(matchNumber) {
     .find(match => match.match === Number(matchNumber));
 }
 
-async function refreshScenarioForecast() {
-  els.status.textContent = state.scenarioPicks.size ? 'Running scenario' : 'Loading simulations';
+function refreshScenarioForecast() {
+  window.clearTimeout(state.scenarioRefreshTimer);
+  els.status.textContent = state.scenarioPicks.size ? 'Solving scenario' : 'Loading forecast';
+  state.scenarioRefreshTimer = window.setTimeout(runScenarioForecastRefresh, SCENARIO_REFRESH_DELAY_MS);
+}
+
+async function runScenarioForecastRefresh() {
+  const requestId = ++state.scenarioRefreshRequestId;
+  state.scenarioRefreshController?.abort();
+  state.scenarioRefreshController = new AbortController();
+
   try {
-    await loadForecast();
+    await loadForecast({ signal: state.scenarioRefreshController.signal });
+    if (requestId !== state.scenarioRefreshRequestId) return;
     render();
     els.status.textContent = state.scenarioPicks.size
-      ? `${Number(state.data.simulationCount || 50000).toLocaleString()} scenario simulations`
+      ? 'Exact scenario forecast'
       : `${Number(state.data.simulationCount || 50000).toLocaleString()} simulations loaded`;
     els.status.classList.add('is-live');
   } catch (error) {
+    if (error.name === 'AbortError') return;
     console.error(error);
     els.status.textContent = 'Scenario unavailable';
+  } finally {
+    if (requestId === state.scenarioRefreshRequestId) {
+      state.scenarioRefreshController = null;
+    }
   }
 }
 
@@ -693,20 +712,21 @@ function matchCard(match, pathMatchNumber, index, matchCount) {
       <header class="match-heading">
         <div>
           ${schedule?.date
-            ? `<time datetime="${escapeHtml(schedule.date)}">${formatDate(schedule.date)}</time>`
-            : `<span>Match date TBD</span>`}
-          <small>${schedule?.officialMatch ? `FIFA match ${escapeHtml(schedule.officialMatch)}` : `Match ${escapeHtml(match.match)}`}</small>
+            ? `<time class="match-date" datetime="${escapeHtml(schedule.date)}">${formatDate(schedule.date)}</time>`
+            : `<span class="match-date">Date TBD</span>`}
+          <small class="match-number">${schedule?.officialMatch ? `FIFA match ${escapeHtml(schedule.officialMatch)}` : `Match ${escapeHtml(match.match)}`}</small>
         </div>
         <strong>${scenarioPick ? 'Scenario pick' : escapeHtml(schedule?.venue || 'Venue TBD')}</strong>
       </header>
       <div class="match-slots">
-        ${(match.slots || []).map(slot => slotCard(slot, match.match, scenarioPick)).join('')}
+        ${(match.slots || []).map(slot => slotCard(slot, match, scenarioPick)).join('')}
       </div>
     </article>`;
 }
 
-function slotCard(slot, matchNumber, scenarioPick) {
+function slotCard(slot, match, scenarioPick) {
   const confirmed = slot.contenders.length === 1 && slot.contenders[0].probability >= 0.999;
+  const fixedMatchup = Boolean(fixedMatchupTeams(match));
   const selected = slot.contenders.find(team => team.code === state.selectedTeam);
   const visible = slot.contenders.slice(0, selected && !slot.contenders.slice(0, 3).some(team => team.code === selected.code) ? 2 : 3);
   if (selected && !visible.some(team => team.code === selected.code)) visible.push(selected);
@@ -714,28 +734,35 @@ function slotCard(slot, matchNumber, scenarioPick) {
     <section class="bracket-slot ${confirmed ? 'is-confirmed' : ''}">
       <header>
         <span>${escapeHtml(slotSourceLabel(slot.source))}</span>
-        ${confirmed ? '<small>Qualified</small>' : ''}
+        ${confirmed ? `<small>${fixedMatchup && !match.completed ? 'Win probability' : 'Qualified'}</small>` : ''}
       </header>
       <div class="slot-contenders">
         ${visible.map(team => `
-          <button class="${teamButtonClasses(team, scenarioPick)}" type="button"
-            data-team-code="${escapeHtml(team.code)}" data-match="${escapeHtml(matchNumber)}" aria-pressed="${team.code === state.selectedTeam}"
+          <button class="${teamButtonClasses(team, match, scenarioPick)}" type="button"
+            data-team-code="${escapeHtml(team.code)}" data-match="${escapeHtml(match.match)}" aria-pressed="${team.code === state.selectedTeam}"
             ${state.lockedTeams.has(team.code) ? 'title="Starting bracket slot confirmed"' : ''}>
             <span>${escapeHtml(team.name)}</span>
-            ${teamStatusLabel(team, confirmed, scenarioPick)}
+            ${teamStatusLabel(team, match, scenarioPick)}
           </button>`).join('')}
       </div>
     </section>`;
 }
 
-function teamButtonClasses(team, scenarioPick) {
+function teamButtonClasses(team, match, scenarioPick) {
   return [
     'bracket-team',
     state.lockedTeams.has(team.code) ? 'has-locked-slot' : '',
     team.code === state.selectedTeam ? 'selected' : '',
-    state.eliminatedTeams.has(team.code) ? 'is-eliminated' : '',
+    matchTeamClasses(team.code, match.completed),
     scenarioTeamClasses(team, scenarioPick)
   ].filter(Boolean).join(' ');
+}
+
+function matchTeamClasses(code, completed) {
+  if (!completed || completed.scenario) return '';
+  if (completed.winner === code) return 'is-match-winner';
+  if (completed.loser === code) return 'is-eliminated';
+  return '';
 }
 
 function scenarioTeamClasses(team, scenarioPick) {
@@ -744,12 +771,47 @@ function scenarioTeamClasses(team, scenarioPick) {
   return 'is-scenario-out';
 }
 
-function teamStatusLabel(team, confirmed, scenarioPick) {
-  if (scenarioPick === team.code) return '<strong>PICK</strong>';
-  if (scenarioPick && scenarioPick !== team.code) return '<strong>WHAT IF OUT</strong>';
-  if (state.eliminatedTeams.has(team.code)) return '<strong>OUT</strong>';
-  if (confirmed) return '<strong>IN</strong>';
+function teamStatusLabel(team, match, scenarioPick) {
+  const score = matchScoreForTeam(match.completed, team.code);
+  if (score) return `<strong>${escapeHtml(score)}</strong>`;
+  const fixedWinProbability = fixedMatchupWinProbability(match, team.code, scenarioPick);
+  if (Number.isFinite(fixedWinProbability)) return `<strong>${percent(fixedWinProbability)}</strong>`;
   return `<strong>${percent(team.probability)}</strong>`;
+}
+
+function matchScoreForTeam(completed, code) {
+  if (!completed || completed.scenario) return null;
+  const side = completed.team1 === code ? 1 : completed.team2 === code ? 2 : null;
+  if (!side) return null;
+
+  const score = side === 1 ? completed.score1 : completed.score2;
+  if (!Number.isFinite(score)) return null;
+
+  const shootoutScore = side === 1 ? completed.shootoutScore1 : completed.shootoutScore2;
+  return Number.isFinite(shootoutScore) ? `${score} (${shootoutScore})` : String(score);
+}
+
+function fixedMatchupWinProbability(match, code, scenarioPick) {
+  const matchup = fixedMatchupTeams(match);
+  if (!matchup || !matchup.some(team => team.code === code)) return null;
+  if (scenarioPick) return scenarioPick === code ? 1 : 0;
+
+  const opponent = matchup.find(team => team.code !== code);
+  const teamRating = teamElo(code);
+  const opponentRating = teamElo(opponent?.code);
+  return knockoutWinProbability(teamRating, opponentRating);
+}
+
+function fixedMatchupTeams(match) {
+  const slots = match.slots || [];
+  if (slots.length !== 2) return null;
+
+  const teams = slots.map(slot => {
+    const contenders = slot.contenders || [];
+    return contenders.length === 1 && contenders[0].probability >= 0.999 ? contenders[0] : null;
+  });
+
+  return teams.every(Boolean) ? teams : null;
 }
 
 function slotSourceLabel(source) {

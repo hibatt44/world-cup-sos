@@ -53,6 +53,17 @@ let forecastScoresCache = {
     refreshPromise: null
 };
 
+let forecastIngredientsCache = {
+    data: null,
+    rankingsTimestamp: 0,
+    resultsTimestamp: 0,
+    liveScoreSignature: '',
+    generatedAt: 0,
+    refreshPromise: null
+};
+const scenarioForecastCache = new Map();
+const SCENARIO_FORECAST_CACHE_LIMIT = 50;
+
 const CACHE_TTLS = {
     rankings: 60 * 60 * 1000, // 1 hour
     results: 5 * 60 * 1000,   // 5 minutes during live play
@@ -1009,6 +1020,34 @@ async function getForecastIngredients(liveScores = { events: [] }) {
     };
 }
 
+async function getCachedForecastIngredients(liveScores = { events: [] }, liveScoreSignature = '') {
+    const cacheStillFresh = forecastIngredientsCache.data &&
+        forecastIngredientsCache.liveScoreSignature === liveScoreSignature &&
+        Date.now() - forecastIngredientsCache.generatedAt < CACHE_TTLS.results;
+
+    if (cacheStillFresh) return forecastIngredientsCache.data;
+    if (forecastIngredientsCache.refreshPromise) return forecastIngredientsCache.refreshPromise;
+
+    forecastIngredientsCache.refreshPromise = (async () => {
+        const forecast = await getForecastIngredients(liveScores);
+        forecastIngredientsCache = {
+            data: forecast,
+            rankingsTimestamp: cache.rankings.timestamp,
+            resultsTimestamp: cache.results.timestamp,
+            liveScoreSignature,
+            generatedAt: Date.now(),
+            refreshPromise: null
+        };
+        return forecast;
+    })();
+
+    try {
+        return await forecastIngredientsCache.refreshPromise;
+    } finally {
+        forecastIngredientsCache.refreshPromise = null;
+    }
+}
+
 function buildForecastPayload({
     sosData,
     playoffSim,
@@ -1021,7 +1060,9 @@ function buildForecastPayload({
     liveScoreSignature,
     scenarioPicks = []
 }) {
-    enrichForecastNames(sosData, playoffSim, teams);
+    const displaySosData = structuredClone(sosData);
+    const displayPlayoffSim = structuredClone(playoffSim);
+    enrichForecastNames(displaySosData, displayPlayoffSim, teams);
 
     const knockoutState = {
         active: Object.keys(completedKnockoutMatches).length > 0,
@@ -1035,10 +1076,10 @@ function buildForecastPayload({
     } : null;
 
     return {
-        ...sosData,
+        ...displaySosData,
         worldCupGroups,
         worldCupSchedule,
-        playoffSimulation: playoffSim,
+        playoffSimulation: displayPlayoffSim,
         groupSimulation: simulation.groupSimulation,
         bracketForecast: simulation.bracketForecast,
         simulationCount: simulation.simulations,
@@ -1085,7 +1126,13 @@ function enrichForecastNames(sosData, playoffSim, teams) {
 async function getScenarioSosPayload(scenarioPicks) {
     const liveScores = await getLiveScoresForForecast();
     const liveScoreSignature = liveScoreSimulationSignature(liveScores);
-    const forecast = await getForecastIngredients(liveScores);
+    const forecast = await getCachedForecastIngredients(liveScores, liveScoreSignature);
+    const scenarioKey = scenarioCacheKey(scenarioPicks, liveScoreSignature);
+    const cachedScenario = scenarioForecastCache.get(scenarioKey);
+    if (cachedScenario && Date.now() - cachedScenario.generatedAt < CACHE_TTLS.results) {
+        return decorateSosPayload(cachedScenario.payload, false);
+    }
+
     const realKnockoutMatches = getCompletedKnockoutMatches(
         worldCupGroups,
         worldCupSchedule,
@@ -1108,13 +1155,33 @@ async function getScenarioSosPayload(scenarioPicks) {
         completedKnockoutMatches
     );
 
-    return decorateSosPayload(buildForecastPayload({
+    const payload = buildForecastPayload({
         ...forecast,
         simulation,
         completedKnockoutMatches,
         liveScoreSignature,
         scenarioPicks
-    }), false);
+    });
+
+    setScenarioForecastCache(scenarioKey, payload);
+    return decorateSosPayload(payload, false);
+}
+
+function scenarioCacheKey(scenarioPicks, liveScoreSignature) {
+    return [
+        liveScoreSignature,
+        cache.rankings.timestamp,
+        cache.results.timestamp,
+        scenarioSignature(scenarioPicks)
+    ].join('::');
+}
+
+function setScenarioForecastCache(key, payload) {
+    if (scenarioForecastCache.has(key)) scenarioForecastCache.delete(key);
+    scenarioForecastCache.set(key, { payload, generatedAt: Date.now() });
+    while (scenarioForecastCache.size > SCENARIO_FORECAST_CACHE_LIMIT) {
+        scenarioForecastCache.delete(scenarioForecastCache.keys().next().value);
+    }
 }
 
 function scenarioPicksToKnockoutMatches(picks, realKnockoutMatches = {}) {
@@ -1188,7 +1255,7 @@ async function refreshSosPayload(liveScores = { events: [] }, liveScoreSignature
     if (sosResponseCache.refreshPromise) return sosResponseCache.refreshPromise;
 
     sosResponseCache.refreshPromise = (async () => {
-        const forecast = await getForecastIngredients(liveScores);
+        const forecast = await getCachedForecastIngredients(liveScores, liveScoreSignature);
         const completedKnockoutMatches = getCompletedKnockoutMatches(
             worldCupGroups,
             worldCupSchedule,
