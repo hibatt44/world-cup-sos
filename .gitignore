@@ -1,7 +1,5 @@
 # Dependencies
 node_modules/
-web/dist/
-*.tsbuildinfo
 
 # Environment variables
 .env
